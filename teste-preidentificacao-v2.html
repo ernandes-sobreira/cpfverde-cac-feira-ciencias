@@ -1236,7 +1236,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="preid-wrap">
     <div class="preid-hero">
       <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
-      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.4 · 02/11/2026</div>
+      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.5 · 02/11/2026</div>
       <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
       <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
     </div>
@@ -1552,10 +1552,17 @@ try {
   const db = getFirestore(app);
   window._FB = {
     add: (d) => addDoc(collection(db,'cpfverde'), d),
-    addMany: async (arr) => {
-      for(let i=0;i<arr.length;i+=20){
-        await Promise.all(arr.slice(i,i+20).map(d=>addDoc(collection(db,'cpfverde'), d)));
+    addMany: async (arr, onProgress) => {
+      const feitos=[];
+      for(let i=0;i<arr.length;i++){
+        const d=arr[i];
+        const writePromise=addDoc(collection(db,'cpfverde'), d);
+        const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Tempo esgotado ao salvar registro '+(i+1))),12000));
+        const ref=await Promise.race([writePromise,timeoutPromise]);
+        feitos.push(ref?.id||null);
+        if(onProgress) onProgress(i+1,arr.length);
       }
+      return feitos;
     },
     upd: (id,d) => updateDoc(doc(db,'cpfverde', id), d),
     del: (id) => deleteDoc(doc(db,'cpfverde', id)),
@@ -1831,18 +1838,50 @@ function resetPreIdImport(){
 }
 async function confirmPreIdImport(){
   if(!_preidPreview.length){showToast('⚠️ Selecione um GeoJSON');return;}
-  const novos=_preidPreview.filter((_,i)=>!_preidDuplicates.includes(i));
-  if(!novos.length){showToast('⚠️ Nenhum ponto novo para importar');return;}
-  const btn=document.getElementById('preidImportBtn');btn.disabled=true;btn.textContent='Importando...';
+  // Recalcula duplicidades no momento da importação, porque pode haver importação parcial anterior.
+  const existentes=publicRecords();
+  const novos=_preidPreview.filter(r=>{
+    return !existentes.some(e=>{
+      const mesmoId=(e.id_publico&&e.id_publico===r.id_publico)||(e.id===r.id_publico);
+      const mesmoUuid=e.uuid&&cleanUUID(e.uuid)===cleanUUID(r.uuid);
+      const perto=Number.isFinite(Number(e.lat))&&Number.isFinite(Number(e.lng))&&haversineM(r.lat,r.lng,Number(e.lat),Number(e.lng))<=2.5;
+      return mesmoId||mesmoUuid||perto;
+    });
+  });
+  if(!novos.length){showToast('ℹ️ Todos os pontos deste arquivo já estão no banco');return;}
+
+  const btn=document.getElementById('preidImportBtn');
+  btn.disabled=true;
+  let gravados=0;
   try{
-    if(window._FB&&window._FB.addMany) await window._FB.addMany(novos);
-    else {window._inds=(window._inds||[]).concat(novos);saveLocal();renderAll();}
-    showToast('✅ '+novos.length+' pré-identificações importadas');
-    resetPreIdImport(); goScreen('map');
-    setTimeout(()=>{ if(novos[0]&&map)map.flyTo([novos[0].lat,novos[0].lng],17,{duration:1}); },300);
-  }catch(e){showToast('❌ Falha na importação: '+e.message);}
-  finally{btn.disabled=false;btn.textContent='Importar somente novos';}
+    if(window._FB&&window._FB.addMany){
+      await window._FB.addMany(novos,(feito,total)=>{
+        gravados=feito;
+        btn.textContent='Importando '+feito+'/'+total+'...';
+      });
+    } else {
+      for(let i=0;i<novos.length;i++){
+        window._inds=(window._inds||[]).concat([novos[i]]);
+        gravados=i+1;
+        btn.textContent='Importando '+gravados+'/'+novos.length+'...';
+      }
+      saveLocal();renderAll();
+    }
+    showToast('✅ '+gravados+' pré-identificações importadas');
+    resetPreIdImport();
+    goScreen('map');
+    setTimeout(()=>{if(novos[0]&&map)map.flyTo([novos[0].lat,novos[0].lng],18,{duration:1});},300);
+  }catch(e){
+    console.error('Falha importação GeoJSON',e);
+    showToast('⚠️ Importação parcial: '+gravados+' salva(s). '+e.message,7000);
+    const msg=document.getElementById('preidMessages');
+    if(msg) msg.innerHTML += '<div class="preid-warn">⚠️ A importação parou após <b>'+gravados+'</b> novo(s) registro(s). Recarregue a página e selecione o mesmo arquivo: o sistema detectará os já salvos e continuará somente com os restantes.<br><small>'+String(e.message||'Erro desconhecido')+'</small></div>';
+  } finally {
+    btn.disabled=false;
+    btn.textContent='Importar somente novos';
+  }
 }
+
 function mkPreIcon(ind){
   return L.divIcon({className:'',html:'<div style="position:relative"><div class="pre-marker">?</div><div style="position:absolute;top:28px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:8px;font-weight:800;padding:2px 5px;border-radius:99px;white-space:nowrap;">PRÉ-ID</div></div>',iconSize:[28,40],iconAnchor:[14,28]});
 }
