@@ -1255,6 +1255,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div style="font-weight:900;color:#1b4332;">🔎 3. Conferir antes de importar</div>
         <div class="preid-summary" id="preidSummary"></div>
         <div id="preidMessages"></div>
+        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Satélite</b> para conferir se cada ponto está sobre a copa correta. Alterne para <b>Mapa</b> para comparar ruas e referências.</div>
         <div id="preidMap"></div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="preid-btn preid-btn-soft" onclick="resetPreIdImport()">Cancelar</button>
@@ -1665,7 +1666,22 @@ function initPreIdMap(){
   if(preidMap){setTimeout(()=>preidMap.invalidateSize(),100);return;}
   const el=document.getElementById('preidMap'); if(!el)return;
   preidMap=L.map('preidMap',{zoomControl:true}).setView([-16.0713,-57.6826],14);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(preidMap);
+
+  const preOsm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
+  });
+
+  const preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
+    maxZoom:19
+  });
+
+  preSat.addTo(preidMap);
+  L.control.layers(
+    {'🛰️ Satélite':preSat,'🗺️ Mapa':preOsm},
+    {},
+    {position:'topright',collapsed:false}
+  ).addTo(preidMap);
 }
 function renderPreIdPreview(){
   initPreIdMap();
@@ -1867,10 +1883,23 @@ function confirmPin(){
 
 window.addEventListener('load', ()=>{
   map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30}).setView([-16.0713,-57.6826],14);
-  // CartoDB Voyager — sem restrição de referer, funciona em arquivo local
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+
+  const osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OpenStreetMap contributors',maxZoom:19
-  }).addTo(map);
+  });
+
+  const satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
+    maxZoom:19
+  });
+
+  osmBase.addTo(map);
+  L.control.layers(
+    {'🗺️ Mapa':osmBase,'🛰️ Satélite':satBase},
+    {},
+    {position:'topright',collapsed:false}
+  ).addTo(map);
+
   L.control.zoom({position:'bottomright'}).addTo(map);
 
   // Mira central (crosshair)
