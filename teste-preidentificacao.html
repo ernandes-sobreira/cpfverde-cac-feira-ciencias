@@ -1605,15 +1605,28 @@ function cleanUUID(v){
 }
 function featureToPreRecord(f, idx){
   if(!f || !f.geometry || f.geometry.type!=='Point' || !Array.isArray(f.geometry.coordinates)) throw new Error('Feição '+(idx+1)+' não é Point.');
-  const lng=Number(f.geometry.coordinates[0]), lat=Number(f.geometry.coordinates[1]);
-  if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180) throw new Error('Coordenada inválida na feição '+(idx+1)+'.');
   const p=f.properties||{};
+  let lng=Number(f.geometry.coordinates[0]), lat=Number(f.geometry.coordinates[1]);
+  let coordFonte='geometry';
+  const geomValida=Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;
+
+  if(!geomValida){
+    const propLng=Number(p.longitude??p.lng??p.lon??p.long);
+    const propLat=Number(p.latitude??p.lat);
+    const propsValidas=Number.isFinite(propLat)&&Number.isFinite(propLng)&&propLat>=-90&&propLat<=90&&propLng>=-180&&propLng<=180;
+    if(propsValidas){
+      lat=propLat; lng=propLng; coordFonte='atributos_latlon';
+    } else {
+      throw new Error('Coordenada inválida na feição '+(idx+1)+'. A geometria não está em longitude/latitude e os campos longitude/latitude também não são válidos.');
+    }
+  }
+
   const uuid=cleanUUID(p.uuid||p.uuid_arvore||p.uuid_full)||makeUUID();
   const suffix=uuid.replace(/-/g,'').slice(0,4).toUpperCase();
   const idPublico=String(p.id_publico||p.id_arvore||p.codigo||'').trim() || ('ARB-4326-'+Math.abs(lat).toFixed(5)+'-'+Math.abs(lng).toFixed(5)+'-'+suffix);
   return {
     id:idPublico, id_publico:idPublico, uuid,
-    lat, lng,
+    lat, lng, coordFonte,
     x_utm:p.x_utm??p.x??null, y_utm:p.y_utm??p.y??null,
     epsg_origem:String(p.epsg_origem||document.getElementById('pi_epsg')?.value||''),
     preOrigem:String(p.origem||p.preOrigem||'IA').toUpperCase(),
@@ -1680,9 +1693,11 @@ async function handlePreIdFile(ev){
       '<div class="preid-kpi"><b>'+ia+'</b><span>Origem IA</span></div>'+
       '<div class="preid-kpi"><b>'+man+'</b><span>Manuais</span></div>'+
       '<div class="preid-kpi"><b>'+dup.length+'</b><span>Duplicatas/suspeitas</span></div>';
+    const fallbackCount=rows.filter(r=>r.coordFonte==='atributos_latlon').length;
     document.getElementById('preidMessages').innerHTML =
       (dup.length?'<div class="preid-warn">⚠️ '+dup.length+' ponto(s) coincidem com UUID/ID existente ou estão a até 2,5 m de um registro já cadastrado. Eles serão <b>ignorados</b> na importação de teste.</div>':'<div class="preid-ok">✅ Nenhuma duplicidade evidente encontrada.</div>')+
-      '<div class="preid-ok">✅ GeoJSON válido · geometrias Point · coordenadas WGS84 válidas.</div>';
+      '<div class="preid-ok">✅ GeoJSON válido · geometrias Point · coordenadas utilizáveis.</div>'+
+      (fallbackCount?'<div class="preid-warn">ℹ️ Em '+fallbackCount+' feição(ões), a geometria não estava em longitude/latitude. O importador usou os campos <b>longitude</b> e <b>latitude</b> do arquivo.</div>':'');
     document.getElementById('preidPreviewCard').style.display='block';
     st.className='preid-ok'; st.innerHTML='✅ <b>'+file.name+'</b> · '+rows.length+' feições lidas';
     setTimeout(renderPreIdPreview,50);
