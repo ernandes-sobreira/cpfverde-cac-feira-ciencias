@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Lora:wght@400;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <style>
 /* ── RESET & VARS ── */
 :root{
@@ -1193,6 +1194,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       </div>
     </div>
     <div class="cfg-card">
+      <div class="cfg-title">🪪 Identidade permanente das árvores</div>
+      <div class="cfg-desc">Na versão de teste, registros antigos sem identidade nova recebem automaticamente um <b>UUID</b> e um <b>ID público ARB-31981-…</b>. O código antigo <b>CPF-xxx</b> é preservado em <code>legacy_id</code>.</div>
+      <div style="background:#ecfdf5;border-radius:8px;padding:10px;font-size:12px;color:#166534;line-height:1.6;">A migração é idempotente: registros que já possuem UUID e ID público não são alterados novamente.</div>
+    </div>
+
+    <div class="cfg-card">
       <div class="cfg-title">ℹ️ Sobre o CPF Verde</div>
       <div class="cfg-desc">
         <b>CPF Verde</b> — Cadastro de Patrimônio Florestal Urbano<br>
@@ -1229,7 +1236,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="preid-wrap">
     <div class="preid-hero">
       <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
-      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.3 · 02/11/2026</div>
+      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.4 · 02/11/2026</div>
       <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
       <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
     </div>
@@ -1559,6 +1566,7 @@ try {
   window._FB.listen(inds => {
     window._inds = inds;
     renderAll();
+    setTimeout(migrateLegacyRecords,120);
     // Se dashboard ou export já abertos, atualizar
     const dash = document.getElementById('screen-dash');
     const exp = document.getElementById('screen-export');
@@ -1587,7 +1595,7 @@ const CRIT = [
 ];
 const PESO_T = CRIT.reduce((s,c)=>s+c.p,0);
 
-let sVals={}, aFilt='todos', selId=null, markers={}, photoB64=null, map, curScreen='map';
+let sVals={}, aFilt='todos', selId=null, markers={}, preHalos=[], photoB64=null, map, curScreen='map';
 
 let _preidParsed = null, _preidPreview = [], _preidDuplicates = [], preidMap = null, preidLayer = null;
 
@@ -1656,6 +1664,49 @@ function getPropCI(obj, names){
   }
   return undefined;
 }
+function latLngTo31981(lat,lng){
+  try{
+    if(typeof proj4!=='function') return null;
+    if(!proj4.defs('EPSG:31981')){
+      proj4.defs('EPSG:31981','+proj=utm +zone=21 +south +ellps=GRS80 +units=m +no_defs +type=crs');
+    }
+    const xy=proj4('EPSG:4326','EPSG:31981',[Number(lng),Number(lat)]);
+    if(!xy||!Number.isFinite(xy[0])||!Number.isFinite(xy[1])) return null;
+    return {x:xy[0],y:xy[1]};
+  }catch(e){console.warn('Conversão 31981 falhou',e);return null;}
+}
+function buildPublicTreeId(lat,lng,uuid){
+  const xy=latLngTo31981(lat,lng);
+  const suf=cleanUUID(uuid).replace(/-/g,'').slice(0,4).toUpperCase()||'0000';
+  if(xy) return 'ARB-31981-'+Math.round(xy.x)+'-'+Math.round(xy.y)+'-'+suf;
+  return 'ARB-4326-'+Math.abs(Number(lat)).toFixed(5)+'-'+Math.abs(Number(lng)).toFixed(5)+'-'+suf;
+}
+let _legacyMigrationStarted=false;
+async function migrateLegacyRecords(){
+  if(_legacyMigrationStarted||!window._FB||!window._FB.upd||!Array.isArray(window._inds)) return;
+  _legacyMigrationStarted=true;
+  const antigos=window._inds.filter(i=>!isPreIdentificada(i)&&i._fid&&(!i.uuid||!i.id_publico));
+  if(!antigos.length) return;
+  let ok=0;
+  for(const old of antigos){
+    try{
+      const uuid=cleanUUID(old.uuid)||makeUUID();
+      const idPublico=old.id_publico||buildPublicTreeId(old.lat,old.lng,uuid);
+      const patch={
+        uuid,
+        id_publico:idPublico,
+        legacy_id:old.legacy_id||old.id||null,
+        status:old.status||'VALIDADA_CAMPO',
+        validado:old.validado!==false,
+        migrado_identidade_em:new Date().toISOString()
+      };
+      await window._FB.upd(old._fid,patch);
+      ok++;
+    }catch(e){console.error('Falha migrando identidade',old?.id,e);}
+  }
+  if(ok) showToast('✅ '+ok+' árvore(s) antiga(s) receberam UUID e ID público');
+}
+
 function featureToPreRecord(f, idx){
   if(!f || !f.geometry || f.geometry.type!=='Point' || !Array.isArray(f.geometry.coordinates)) throw new Error('Feição '+(idx+1)+' não é Point.');
   const p=f.properties||{};
@@ -1679,7 +1730,7 @@ function featureToPreRecord(f, idx){
   const idPublico=String(p.id_publico||p.id_arvore||p.codigo||'').trim() || ('ARB-4326-'+Math.abs(lat).toFixed(5)+'-'+Math.abs(lng).toFixed(5)+'-'+suffix);
   return {
     id:idPublico, id_publico:idPublico, uuid,
-    lat, lng, coordFonte,
+    lat, lng, lat_pre:lat, lng_pre:lng, lat_campo:null, lng_campo:null, acc_campo:null, coordFonte,
     x_utm:p.x_utm??p.x??null, y_utm:p.y_utm??p.y??null,
     epsg_origem:String(p.epsg_origem||document.getElementById('pi_epsg')?.value||''),
     preOrigem:String(p.origem||p.preOrigem||'IA').toUpperCase(),
@@ -1806,7 +1857,7 @@ function openPreSheet(ind){
     '<div class="kv"><span class="kv-k">Origem:</span><span class="kv-v">'+(ind.preOrigem||'IA')+'</span></div>'+
     '<div class="kv"><span class="kv-k">Campanha:</span><span class="kv-v">'+(ind.campanha||'—')+'</span></div>'+
     '<div class="kv"><span class="kv-k">Score IA:</span><span class="kv-v">'+(ind.score??'—')+'</span></div></div>'+
-    '<div class="sec"><div class="sec-title">Localização</div><div class="coords">📍 '+Number(ind.lat).toFixed(7)+', '+Number(ind.lng).toFixed(7)+'</div></div>'+
+    '<div class="sec"><div class="sec-title">Localização estimada</div><div class="coords">📍 '+Number(ind.lat_pre??ind.lat).toFixed(7)+', '+Number(ind.lng_pre??ind.lng).toFixed(7)+'</div><div style="margin-top:7px;font-size:11.5px;color:#64748b;line-height:1.5;">🔵 O círculo azul representa uma incerteza visual de aproximadamente 5 m. A posição inicial vem do centroide da detecção na ortofoto; a coordenada de campo será armazenada separadamente após a validação.</div></div>'+
     '<div class="sec"><div class="sec-title">O que falta</div><div style="font-size:12.5px;line-height:1.9;color:#344e41;">☐ Confirmar existência<br>☐ Fotografia<br>☐ Espécie<br>☐ Circunferência / DAP<br>☐ Saúde e manejo</div></div>';
   const edit=document.getElementById('shEditBtn'); edit.style.display='flex';edit.style.background='#2563eb';edit.style.color='#fff';edit.textContent='🌿 Validar esta árvore';edit.onclick=()=>{closeSheet();startEdit(ind.id);};
   const del=document.getElementById('shDelBtn');del.style.display='none';
@@ -2004,8 +2055,16 @@ function mkIcon(ind){
 
 function renderMarkers(){
   Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
+  preHalos.forEach(h=>map.removeLayer(h)); preHalos=[];
   publicRecords().forEach(ind=>{
     if(!ind.lat||!ind.lng)return;
+    if(isPreIdentificada(ind)){
+      const h=L.circle([ind.lat,ind.lng],{
+        radius:5,color:'#2563eb',weight:1.5,opacity:.7,
+        fillColor:'#60a5fa',fillOpacity:.14,interactive:false
+      }).addTo(map);
+      preHalos.push(h);
+    }
     const m=L.marker([ind.lat,ind.lng],{icon:isPreIdentificada(ind)?mkPreIcon(ind):mkIcon(ind)});
     m.on('click',()=>openSheet(ind.id));
     m.addTo(map); markers[ind.id]=m;
@@ -2047,7 +2106,7 @@ function renderList(){
         ${(i.servicos||[]).includes('fruto_humano')?'<span class="bdg bdg-fr">🍎 Fruto</span>':''}
         ${i.carbKg?`<span class="bdg bdg-c">🌍 ${Math.round(i.carbKg)}kg</span>`:''}
       </div>
-      <div class="tcard-meta">${i.id} · ${i.bairro||'—'} · ${i.data||'—'}</div>
+      <div class="tcard-meta">${i.id_publico||i.id} · ${i.bairro||'—'} · ${i.data||'—'}${i.legacy_id?' · '+i.legacy_id:''}</div>
     </div>
     ${n!=null?`<div class="tcard-score"><div class="score-num" style="color:${c}">${n.toFixed(1)}</div><div class="score-lbl">/10</div></div>`:''}`;
     el.appendChild(d);
@@ -2091,7 +2150,7 @@ function openSheet(id){
   let crH=''; if(ind.saudeDetalhes) CRIT.forEach(cr=>{const v=ind.saudeDetalhes[cr.k];if(v==null)return;const cc=v>=3?'#2d6a4f':v>=2?'#e9a833':'#e05252';crH+=`<div class="crit-card"><div class="crit-name">${cr.l}</div><div class="crit-score" style="color:${cc}">${v}/4</div></div>`;});
 
   document.getElementById('shBody').innerHTML=`
-  <div class="sheet-id">${ind.id} · ${ind.data||'—'}</div>
+  <div class="sheet-id">${ind.id_publico||ind.id} · ${ind.data||'—'}${ind.legacy_id?' · legado '+ind.legacy_id:''}</div>
   <div class="sheet-name">${ind.nome}</div>
   <div class="sheet-sci">${ind.sci||'—'} ${ind.familia?'· '+ind.familia:''}</div>
 
@@ -3406,6 +3465,12 @@ async function saveInd(){
     if(old){
       ind.uuid = cleanUUID(old.uuid)||makeUUID();
       ind.id_publico = old.id_publico||old.id;
+      ind.legacy_id = old.legacy_id||null;
+      ind.lat_pre = old.lat_pre??old.lat??null;
+      ind.lng_pre = old.lng_pre??old.lng??null;
+      ind.lat_campo = lat;
+      ind.lng_campo = lng;
+      ind.acc_campo = document.getElementById('f_acc').value||null;
       ind.preOrigem = old.preOrigem||old.origem_preid||null;
       ind.campanha = old.campanha||null;
       ind.dataImagem = old.dataImagem||null;
@@ -3431,7 +3496,11 @@ async function saveInd(){
     return;
   }
   ind.uuid = makeUUID();
-  ind.id_publico = ind.id;
+  ind.legacy_id = ind.id;
+  ind.id_publico = buildPublicTreeId(ind.lat,ind.lng,ind.uuid);
+  ind.lat_campo = ind.lat;
+  ind.lng_campo = ind.lng;
+  ind.acc_campo = ind.acc||null;
   ind.status = 'VALIDADA_CAMPO';
   ind.validado = true;
   await addInd(ind);
