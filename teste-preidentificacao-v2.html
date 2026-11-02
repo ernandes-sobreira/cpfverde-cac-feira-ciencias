@@ -489,6 +489,12 @@ body{display:flex;flex-direction:column;overflow:hidden;}
 #preidMap{height:280px;border-radius:12px;overflow:hidden;margin-top:10px;border:1px solid #dbe8dd;}
 .pre-marker{width:28px;height:28px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:900;}
 .pre-badge{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:800;}
+.base-toggle{display:flex;gap:6px;background:rgba(255,255,255,.96);padding:5px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.18);z-index:700;}
+.base-toggle button{border:none;border-radius:7px;padding:7px 10px;font-family:Nunito,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:#eef2f7;color:#334155;}
+.base-toggle button.on{background:#1b4332;color:#fff;}
+#mainBaseToggle{position:absolute;top:12px;right:12px;}
+#preBaseToggle{margin-top:8px;justify-content:center;}
+
 </style>
 </head>
 <body style="padding-top:var(--hdr-height,110px);padding-bottom:calc(62px + env(safe-area-inset-bottom));">
@@ -526,6 +532,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="screen on" id="screen-map">
   <div id="mapWrap">
     <div id="map"></div>
+    <div class="base-toggle" id="mainBaseToggle">
+      <button id="mainBtnMap" class="on" onclick="setMainBase('map')">🗺️ Mapa</button>
+      <button id="mainBtnSat" onclick="setMainBase('sat')">🛰️ Satélite</button>
+    </div>
     <div class="map-legend">
       <div class="legend-title">Saúde</div>
       <div class="legend-row"><div class="legend-dot" style="background:#2d6a4f"></div>Bom ≥7</div>
@@ -1219,7 +1229,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="preid-wrap">
     <div class="preid-hero">
       <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
-      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2 · 02/11/2026</div>
+      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.1 · 02/11/2026</div>
       <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
       <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
     </div>
@@ -1256,6 +1266,10 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div class="preid-summary" id="preidSummary"></div>
         <div id="preidMessages"></div>
         <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Satélite</b> para conferir se cada ponto está sobre a copa correta. Alterne para <b>Mapa</b> para comparar ruas e referências.</div>
+        <div class="base-toggle" id="preBaseToggle">
+          <button id="preBtnSat" class="on" onclick="setPreBase('sat')">🛰️ Satélite</button>
+          <button id="preBtnMap" onclick="setPreBase('map')">🗺️ Mapa</button>
+        </div>
         <div id="preidMap"></div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="preid-btn preid-btn-soft" onclick="resetPreIdImport()">Cancelar</button>
@@ -1589,6 +1603,31 @@ function isPreIdentificada(ind){
 function isHiddenRecord(ind){
   return !!ind && ['NAO_ARVORE','ARQUIVADA'].includes(ind.status);
 }
+function setMainBase(tipo){
+  if(!map||!window._osmBase||!window._satBase)return;
+  if(tipo==='sat'){
+    if(map.hasLayer(window._osmBase)) map.removeLayer(window._osmBase);
+    if(!map.hasLayer(window._satBase)) window._satBase.addTo(map);
+  }else{
+    if(map.hasLayer(window._satBase)) map.removeLayer(window._satBase);
+    if(!map.hasLayer(window._osmBase)) window._osmBase.addTo(map);
+  }
+  document.getElementById('mainBtnMap')?.classList.toggle('on',tipo==='map');
+  document.getElementById('mainBtnSat')?.classList.toggle('on',tipo==='sat');
+}
+function setPreBase(tipo){
+  if(!preidMap||!window._preOsm||!window._preSat)return;
+  if(tipo==='map'){
+    if(preidMap.hasLayer(window._preSat)) preidMap.removeLayer(window._preSat);
+    if(!preidMap.hasLayer(window._preOsm)) window._preOsm.addTo(preidMap);
+  }else{
+    if(preidMap.hasLayer(window._preOsm)) preidMap.removeLayer(window._preOsm);
+    if(!preidMap.hasLayer(window._preSat)) window._preSat.addTo(preidMap);
+  }
+  document.getElementById('preBtnMap')?.classList.toggle('on',tipo==='map');
+  document.getElementById('preBtnSat')?.classList.toggle('on',tipo==='sat');
+}
+
 function publicRecords(){
   return (window._inds||[]).filter(i=>!isHiddenRecord(i));
 }
@@ -1667,21 +1706,16 @@ function initPreIdMap(){
   const el=document.getElementById('preidMap'); if(!el)return;
   preidMap=L.map('preidMap',{zoomControl:true}).setView([-16.0713,-57.6826],14);
 
-  const preOsm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  window._preOsm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OpenStreetMap contributors',maxZoom:19
   });
 
-  const preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+  window._preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
     maxZoom:19
   });
 
-  preSat.addTo(preidMap);
-  L.control.layers(
-    {'🛰️ Satélite':preSat,'🗺️ Mapa':preOsm},
-    {},
-    {position:'topright',collapsed:false}
-  ).addTo(preidMap);
+  window._preSat.addTo(preidMap);
 }
 function renderPreIdPreview(){
   initPreIdMap();
@@ -1884,22 +1918,16 @@ function confirmPin(){
 window.addEventListener('load', ()=>{
   map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30}).setView([-16.0713,-57.6826],14);
 
-  const osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  window._osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OpenStreetMap contributors',maxZoom:19
   });
 
-  const satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+  window._satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
     maxZoom:19
   });
 
-  osmBase.addTo(map);
-  L.control.layers(
-    {'🗺️ Mapa':osmBase,'🛰️ Satélite':satBase},
-    {},
-    {position:'topright',collapsed:false}
-  ).addTo(map);
-
+  window._osmBase.addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
 
   // Mira central (crosshair)
