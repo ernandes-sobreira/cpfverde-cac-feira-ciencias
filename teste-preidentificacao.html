@@ -1221,6 +1221,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
       <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div>
       <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
+      <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
     </div>
     <div style="padding:12px;">
       <div class="preid-card">
@@ -3170,6 +3171,10 @@ Nos servicos, inclua APENAS os que se aplicam à espécie identificada, da lista
         4. Cole o código do arquivo <code>supabase-function.ts</code><br>
         5. Em <b>Settings → Secrets</b> adicione <code>ANTHROPIC_API_KEY</code><br>
         6. Copie a URL da função e me mande — atualizo em 1 minuto!`;
+    } else if(/api.?key|required|anthropic/i.test(msg)) {
+      showToast('ℹ️ A IA por foto não está configurada. A pré-identificação por GeoJSON continua funcionando.');
+      const cw=document.getElementById('corsWarning');
+      if(cw){cw.style.display='block';cw.innerHTML='<b>ℹ️ Identificação automática por foto indisponível neste teste.</b><br>Isso não afeta o mapa, o Firebase nem a importação de pré-identificações do QGIS. Você pode escolher a espécie manualmente ou continuar a validação sem usar IA por foto.';}
     } else {
       showToast('⚠️ ' + msg.substring(0,70));
     }
@@ -3800,10 +3805,7 @@ function renderDashboard(){
 
 // ═══════ CFG ═══════
 function saveCfg(){
-  const cfg={apiKey:document.getElementById('c_key').value.trim(),projectId:document.getElementById('c_pid').value.trim(),authDomain:document.getElementById('c_dom').value.trim(),appId:document.getElementById('c_app').value.trim()};
-  if(!cfg.apiKey){showToast('⚠️ API Key obrigatória');return;}
-  localStorage.setItem('cpfverde_fb',JSON.stringify(cfg));
-  showToast('✅ Salvo! Recarregue para conectar ao Firebase.');
+  showToast('ℹ️ O Firebase deste site já está configurado no código. Nenhuma API Key precisa ser informada pelo usuário.');
 }
 
 // ═══════ TOAST ═══════
