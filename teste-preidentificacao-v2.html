@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     <div id="map"></div>
     <div class="base-toggle" id="mainBaseToggle">
       <button id="mainBtnMap" class="on" onclick="setMainBase('map')">🗺️ Mapa</button>
-      <button id="mainBtnSat" onclick="setMainBase('sat')">🛰️ Satélite</button>
+      <button id="mainBtnSat" onclick="setMainBase('sat')">🛩️ Ortofoto 2024</button>
     </div>
     <div class="map-legend">
       <div class="legend-title">Saúde</div>
@@ -1229,7 +1229,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="preid-wrap">
     <div class="preid-hero">
       <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
-      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.1 · 02/11/2026</div>
+      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div><div style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800;">TESTE v2.2 · 02/11/2026</div>
       <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
       <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
     </div>
@@ -1265,9 +1265,9 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div style="font-weight:900;color:#1b4332;">🔎 3. Conferir antes de importar</div>
         <div class="preid-summary" id="preidSummary"></div>
         <div id="preidMessages"></div>
-        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Satélite</b> para conferir se cada ponto está sobre a copa. Em zoom muito alto, a última imagem disponível é ampliada para evitar “Map data not available”.</div>
+        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Ortofoto 2024</b> para conferir os pontos sobre a mesma imagem aérea de alta resolução usada no piloto de Cáceres.</div>
         <div class="base-toggle" id="preBaseToggle">
-          <button id="preBtnSat" class="on" onclick="setPreBase('sat')">🛰️ Satélite</button>
+          <button id="preBtnSat" class="on" onclick="setPreBase('sat')">🛩️ Ortofoto 2024</button>
           <button id="preBtnMap" onclick="setPreBase('map')">🗺️ Mapa</button>
         </div>
         <div id="preidMap"></div>
@@ -1710,9 +1710,9 @@ function initPreIdMap(){
     attribution:'© OpenStreetMap contributors',maxZoom:19
   });
 
-  window._preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
-    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
-    maxNativeZoom:18,
+  window._preSat = L.tileLayer('https://tiles.openaerialmap.org/5dbbc0aa05580100062e021b/0/66d675c65463cd00015f2fab/{z}/{x}/{y}.png',{
+    attribution:'Ortofoto Centro Histórico de Cáceres · Túllio F · OpenAerialMap · CC BY 4.0',
+    maxNativeZoom:21,
     maxZoom:22
   });
 
@@ -1923,9 +1923,9 @@ window.addEventListener('load', ()=>{
     attribution:'© OpenStreetMap contributors',maxZoom:19
   });
 
-  window._satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
-    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
-    maxNativeZoom:18,
+  window._satBase = L.tileLayer('https://tiles.openaerialmap.org/5dbbc0aa05580100062e021b/0/66d675c65463cd00015f2fab/{z}/{x}/{y}.png',{
+    attribution:'Ortofoto Centro Histórico de Cáceres · Túllio F · OpenAerialMap · CC BY 4.0',
+    maxNativeZoom:21,
     maxZoom:22
   });
 
