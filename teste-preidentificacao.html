@@ -1639,7 +1639,7 @@ function initPreIdMap(){
   if(preidMap){setTimeout(()=>preidMap.invalidateSize(),100);return;}
   const el=document.getElementById('preidMap'); if(!el)return;
   preidMap=L.map('preidMap',{zoomControl:true}).setView([-16.0713,-57.6826],14);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap · © CartoDB',maxZoom:20,subdomains:'abcd'}).addTo(preidMap);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(preidMap);
 }
 function renderPreIdPreview(){
   initPreIdMap();
@@ -1840,8 +1840,8 @@ function confirmPin(){
 window.addEventListener('load', ()=>{
   map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30}).setView([-16.0713,-57.6826],14);
   // CartoDB Voyager — sem restrição de referer, funciona em arquivo local
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-    attribution:'© OpenStreetMap · © CartoDB',maxZoom:19,subdomains:'abcd'
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
   }).addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
 
