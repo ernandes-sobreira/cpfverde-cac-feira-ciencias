@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Lora:wght@400;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <style>
 /* ── RESET & VARS ── */
 :root{
@@ -466,6 +467,35 @@ body{display:flex;flex-direction:column;overflow:hidden;}
 .btn2:active{transform:scale(.97);}
 .btn-outline{background:var(--f5);color:var(--t2);border:1.5px solid #dde8df!important;}
 .btn-solid{background:var(--g3);color:var(--w);}
+/* ── PRÉ-IDENTIFICAÇÃO ── */
+.preid-wrap{flex:1;overflow-y:auto;background:var(--f5);}
+.preid-hero{background:linear-gradient(135deg,#123524,#2d6a4f);padding:22px 16px;color:#fff;}
+.preid-card{background:#fff;border-radius:14px;padding:16px;box-shadow:var(--sh);margin-bottom:10px;}
+.preid-step{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #eef3ef;}
+.preid-step:last-child{border-bottom:none;}
+.preid-step-n{width:28px;height:28px;border-radius:50%;background:#d8f3dc;color:#1b4332;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.preid-drop{border:2px dashed #74a57e;border-radius:14px;padding:20px 14px;text-align:center;background:#f7fff9;cursor:pointer;}
+.preid-drop.drag{background:#e8f8ee;border-color:#2d6a4f;}
+.preid-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.preid-kpi{background:#f6f8f6;border-radius:10px;padding:10px;text-align:center;}
+.preid-kpi b{display:block;font-size:20px;color:#1b4332;}
+.preid-kpi span{font-size:10px;color:#6b7f70;text-transform:uppercase;letter-spacing:.5px;}
+.preid-warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px;font-size:12px;line-height:1.5;margin-top:10px;}
+.preid-ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#166534;border-radius:10px;padding:10px;font-size:12px;line-height:1.5;margin-top:10px;}
+.preid-btn{width:100%;height:46px;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:14px;font-weight:800;cursor:pointer;}
+.preid-btn-main{background:#2d6a4f;color:#fff;}
+.preid-btn-soft{background:#eef6f0;color:#1b4332;border:1.5px solid #b7d8c2;}
+.preid-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.preid-fields .fld{margin:0;}
+#preidMap{height:280px;border-radius:12px;overflow:hidden;margin-top:10px;border:1px solid #dbe8dd;}
+.pre-marker{width:28px;height:28px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:900;}
+.pre-badge{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:800;}
+.base-toggle{display:flex;gap:6px;background:rgba(255,255,255,.96);padding:5px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.18);z-index:700;}
+.base-toggle button{border:none;border-radius:7px;padding:7px 10px;font-family:Nunito,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:#eef2f7;color:#334155;}
+.base-toggle button.on{background:#1b4332;color:#fff;}
+#mainBaseToggle{position:absolute;top:12px;right:12px;}
+#preBaseToggle{margin-top:8px;justify-content:center;}
+
 </style>
 </head>
 <body style="padding-top:var(--hdr-height,110px);padding-bottom:calc(62px + env(safe-area-inset-bottom));">
@@ -488,7 +518,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     <button class="hdr-btn" onclick="goScreen('cfg')" title="Configurações">⚙️</button>
   </div>
   <div class="stats-bar">
-    <div class="stat"><div class="stat-num" id="sT">0</div><div class="stat-lbl">Indivíduos</div></div>
+    <div class="stat"><div class="stat-num" id="sT">0</div><div class="stat-lbl">Avaliadas</div></div>
+    <div class="stat"><div class="stat-num" id="sP" style="color:#93c5fd">0</div><div class="stat-lbl">Pré-ID</div></div>
     <div class="stat"><div class="stat-num" id="sB" style="color:#6ee7b7">0</div><div class="stat-lbl">Bom Estado</div></div>
     <div class="stat"><div class="stat-num" id="sC" style="color:#fca5a5">0</div><div class="stat-lbl">Crítico</div></div>
     <div class="stat"><div class="stat-num" id="sN">0</div><div class="stat-lbl">Nativas</div></div>
@@ -502,11 +533,16 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="screen on" id="screen-map">
   <div id="mapWrap">
     <div id="map"></div>
+    <div class="base-toggle" id="mainBaseToggle">
+      <button id="mainBtnMap" class="on" onclick="setMainBase('map')">🗺️ Mapa</button>
+      <button id="mainBtnSat" onclick="setMainBase('sat')">🛰️ Satélite</button>
+    </div>
     <div class="map-legend">
       <div class="legend-title">Saúde</div>
       <div class="legend-row"><div class="legend-dot" style="background:#2d6a4f"></div>Bom ≥7</div>
       <div class="legend-row"><div class="legend-dot" style="background:#e9a833"></div>Regular 4–7</div>
       <div class="legend-row"><div class="legend-dot" style="background:#e05252"></div>Crítico &lt;4</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div>Pré-identificada</div>
     </div>
     <!-- Banner modo PIN -->
     <div id="pinBanner" style="display:none;position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#1b4332;color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,.3);white-space:nowrap;">
@@ -1158,6 +1194,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       </div>
     </div>
     <div class="cfg-card">
+      <div class="cfg-title">🪪 Identidade permanente das árvores</div>
+      <div class="cfg-desc">Registros antigos sem identidade nova recebem automaticamente um <b>UUID</b> e um <b>ID público ARB-31981-…</b>. O código antigo <b>CPF-xxx</b> é preservado em <code>legacy_id</code>.</div>
+      <div style="background:#ecfdf5;border-radius:8px;padding:10px;font-size:12px;color:#166534;line-height:1.6;">A migração é idempotente: registros que já possuem UUID e ID público não são alterados novamente.</div>
+    </div>
+
+    <div class="cfg-card">
       <div class="cfg-title">ℹ️ Sobre o CPF Verde</div>
       <div class="cfg-desc">
         <b>CPF Verde</b> — Cadastro de Patrimônio Florestal Urbano<br>
@@ -1188,6 +1230,83 @@ document.addEventListener('DOMContentLoaded',()=>{
   </div>
 </div>
 
+
+<!-- PRÉ-IDENTIFICAÇÃO -->
+<div class="screen" id="screen-preid">
+  <div class="preid-wrap">
+    <div class="preid-hero">
+      <div style="font-size:34px;margin-bottom:6px;">🛰️🌳</div>
+      <div style="font-family:Lora,serif;font-size:21px;font-weight:700;">Pré-identificação de árvores</div>
+      <div style="font-size:12px;color:#b7e4c7;line-height:1.55;margin-top:5px;">Importe pontos produzidos no QGIS/GeoAI. Eles entram como candidatos e só viram árvores avaliadas após validação em campo.</div>
+      <div style="margin-top:10px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:8px 10px;font-size:11px;color:#e7f7ed;">✅ Este módulo de pré-identificação <b>não precisa de chave de IA/API</b>. O GeoJSON é processado diretamente no navegador e salvo no Firestore já configurado.</div>
+    </div>
+    <div style="padding:12px;">
+      <div class="preid-card">
+        <div style="font-weight:900;color:#1b4332;margin-bottom:10px;">📥 1. Enviar GeoJSON</div>
+        <div class="preid-drop" id="preidDrop" onclick="document.getElementById('preidFile').click()">
+          <input id="preidFile" type="file" style="display:none" onchange="handlePreIdFile(event)">
+          <div style="font-size:32px;margin-bottom:4px;">🗺️</div>
+          <div style="font-weight:800;color:#1b4332;">Selecionar arquivo GeoJSON</div>
+          <div style="font-size:11px;color:#6b7f70;margin-top:4px;">Um ponto por árvore pré-identificada</div>
+        </div>
+        <div id="preidFileStatus" style="display:none;"></div>
+      </div>
+
+      <div class="preid-card">
+        <div style="font-weight:900;color:#1b4332;margin-bottom:10px;">🧪 2. Metadados da campanha</div>
+        <div class="preid-fields">
+          <div class="fld"><label>Nome da campanha</label><input id="pi_campanha" value="Piloto Cáceres — QGIS/GeoAI"></div>
+          <div class="fld"><label>Data da imagem</label><input id="pi_dataimg" type="date"></div>
+          <div class="fld"><label>Resolução usada (cm/pixel)</label><input id="pi_res" type="number" value="10" step="0.1"></div>
+          <div class="fld"><label>EPSG original</label><input id="pi_epsg" value="31981"></div>
+          <div class="fld"><label>Software</label><input id="pi_soft" value="QGIS 3.42.1 Münster"></div>
+          <div class="fld"><label>Modelo</label><input id="pi_modelo" value="GeoAI / DeepForest Tree"></div>
+          <div class="fld"><label>Patch Size</label><input id="pi_patch" type="number" value="848"></div>
+          <div class="fld"><label>Score Threshold</label><input id="pi_score" type="number" value="0.14" step="0.01"></div>
+          <div class="fld"><label>Patch Overlap</label><input id="pi_overlap" type="number" value="0.25" step="0.01"></div>
+          <div class="fld"><label>IoU Threshold</label><input id="pi_iou" type="number" value="0.15" step="0.01"></div>
+        </div>
+      </div>
+
+      <div class="preid-card" id="preidPreviewCard" style="display:none;">
+        <div style="font-weight:900;color:#1b4332;">🔎 3. Conferir antes de importar</div>
+        <div class="preid-summary" id="preidSummary"></div>
+        <div id="preidMessages"></div>
+        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Satélite</b> para conferir os pontos. A imagem nativa é usada até o nível 16; em zoom maior o site apenas amplia essa imagem para não carregar tiles cinza indisponíveis.</div>
+        <div class="base-toggle" id="preBaseToggle">
+          <button id="preBtnSat" class="on" onclick="setPreBase('sat')">🛰️ Satélite</button>
+          <button id="preBtnMap" onclick="setPreBase('map')">🗺️ Mapa</button>
+        </div>
+        <div id="preidMap"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="preid-btn preid-btn-soft" onclick="resetPreIdImport()">Cancelar</button>
+          <button class="preid-btn preid-btn-main" id="preidImportBtn" onclick="confirmPreIdImport()">Importar somente novos</button>
+        </div>
+      </div>
+
+      <div class="preid-card" style="background:linear-gradient(135deg,#effaf3,#f7fff9);border:2px solid #b7e4c7;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:30px;">📗</div>
+          <div>
+            <div style="font-weight:900;color:#1b4332;">Manual completo de pré-identificação</div>
+            <div style="font-size:11px;color:#5f7467;">QGIS · GeoAI · DeepForest · revisão · GeoJSON</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#365143;line-height:1.6;margin-bottom:10px;">Use o manual oficial para repetir o método em outra área, desde a ortofoto até a importação no CPF Verde.</div>
+        <a href="manual-pre-identificacao.html" target="_blank" style="height:44px;border-radius:10px;background:#1b4332;color:#fff;text-decoration:none;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;">📖 Abrir manual completo</a>
+      </div>
+
+      <div class="preid-card">
+        <div style="font-weight:900;color:#1b4332;margin-bottom:8px;">📘 Como preparar o arquivo</div>
+        <div class="preid-step"><div class="preid-step-n">1</div><div><b>Ortofoto de alta resolução</b><div style="font-size:12px;color:#627468;">Use uma imagem georreferenciada adequada para árvores individuais.</div></div></div>
+        <div class="preid-step"><div class="preid-step-n">2</div><div><b>QGIS + GeoAI/DeepForest</b><div style="font-size:12px;color:#627468;">Detecte as copas, revise falsos positivos e acrescente manualmente árvores omitidas.</div></div></div>
+        <div class="preid-step"><div class="preid-step-n">3</div><div><b>UUID e ponto central</b><div style="font-size:12px;color:#627468;">Cada indivíduo deve ter identidade permanente. Converta as caixas revisadas em centroides.</div></div></div>
+        <div class="preid-step"><div class="preid-step-n">4</div><div><b>Exportar EPSG:4326</b><div style="font-size:12px;color:#627468;">Exporte a camada final como GeoJSON em WGS84. O site valida tudo antes da importação.</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- EXPORTAR DADOS -->
 <div class="screen" id="screen-export">
   <div style="flex:1;overflow-y:auto;">
@@ -1198,6 +1317,14 @@ document.addEventListener('DOMContentLoaded',()=>{
       <div style="font-size:12px;color:var(--g6);margin-top:4px;">Baixe todos os registros para análise estatística</div>
     </div>
     <div style="padding:14px;display:flex;flex-direction:column;gap:10px;" id="exportCards">
+      <div style="background:linear-gradient(135deg,#eff6ff,#ecfdf5);border:2px solid #93c5fd;border-radius:var(--r12);padding:16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:30px;">🛰️🌳</div>
+          <div><div style="font-weight:900;color:#1b4332;">Importar pré-identificação</div><div style="font-size:11px;color:#4b6b59;">GeoJSON produzido no QGIS/GeoAI</div></div>
+        </div>
+        <div style="font-size:12px;color:#365143;line-height:1.55;margin-bottom:10px;">Os pontos entram separados das árvores já avaliadas e ficam aguardando validação em campo.</div>
+        <button onclick="goScreen('preid')" style="width:100%;height:44px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-weight:800;cursor:pointer;">Abrir pré-identificação</button>
+      </div>
 
       <!-- CSV completo -->
       <div style="background:var(--w);border-radius:var(--r12);padding:16px;box-shadow:var(--sh);">
@@ -1421,7 +1548,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <!-- FIREBASE MODULE -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot }
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -1437,6 +1564,19 @@ try {
   const db = getFirestore(app);
   window._FB = {
     add: (d) => addDoc(collection(db,'cpfverde'), d),
+    addMany: async (arr, onProgress) => {
+      const feitos=[];
+      for(let i=0;i<arr.length;i++){
+        const d=arr[i];
+        const writePromise=addDoc(collection(db,'cpfverde'), d);
+        const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Tempo esgotado ao salvar registro '+(i+1))),12000));
+        const ref=await Promise.race([writePromise,timeoutPromise]);
+        feitos.push(ref?.id||null);
+        if(onProgress) onProgress(i+1,arr.length);
+      }
+      return feitos;
+    },
+    upd: (id,d) => updateDoc(doc(db,'cpfverde', id), d),
     del: (id) => deleteDoc(doc(db,'cpfverde', id)),
     listen: (cb) => onSnapshot(collection(db,'cpfverde'), s => cb(s.docs.map(d=>({...d.data(), _fid:d.id}))))
   };
@@ -1445,6 +1585,7 @@ try {
   window._FB.listen(inds => {
     window._inds = inds;
     renderAll();
+    setTimeout(migrateLegacyRecords,120);
     // Se dashboard ou export já abertos, atualizar
     const dash = document.getElementById('screen-dash');
     const exp = document.getElementById('screen-export');
@@ -1473,7 +1614,308 @@ const CRIT = [
 ];
 const PESO_T = CRIT.reduce((s,c)=>s+c.p,0);
 
-let sVals={}, aFilt='todos', selId=null, markers={}, photoB64=null, map, curScreen='map';
+let sVals={}, aFilt='todos', selId=null, markers={}, preHalos=[], photoB64=null, map, curScreen='map';
+
+let _preidParsed = null, _preidPreview = [], _preidDuplicates = [], preidMap = null, preidLayer = null;
+
+function makeUUID(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8); return v.toString(16);
+  });
+}
+function isPreIdentificada(ind){
+  return !!ind && (ind.preIdentificada===true || ind.status==='PRE_IDENTIFICADA' || ind.status_cadastro==='PRE_IDENTIFICADA');
+}
+function isHiddenRecord(ind){
+  return !!ind && ['NAO_ARVORE','ARQUIVADA'].includes(ind.status);
+}
+function setMainBase(tipo){
+  if(!map||!window._osmBase||!window._satBase)return;
+  if(tipo==='sat'){
+    if(map.hasLayer(window._osmBase)) map.removeLayer(window._osmBase);
+    if(!map.hasLayer(window._satBase)) window._satBase.addTo(map);
+  }else{
+    if(map.hasLayer(window._satBase)) map.removeLayer(window._satBase);
+    if(!map.hasLayer(window._osmBase)) window._osmBase.addTo(map);
+  }
+  document.getElementById('mainBtnMap')?.classList.toggle('on',tipo==='map');
+  document.getElementById('mainBtnSat')?.classList.toggle('on',tipo==='sat');
+}
+function setPreBase(tipo){
+  if(!preidMap||!window._preOsm||!window._preSat)return;
+  if(tipo==='map'){
+    if(preidMap.hasLayer(window._preSat)) preidMap.removeLayer(window._preSat);
+    if(!preidMap.hasLayer(window._preOsm)) window._preOsm.addTo(preidMap);
+  }else{
+    if(preidMap.hasLayer(window._preOsm)) preidMap.removeLayer(window._preOsm);
+    if(!preidMap.hasLayer(window._preSat)) window._preSat.addTo(preidMap);
+  }
+  document.getElementById('preBtnMap')?.classList.toggle('on',tipo==='map');
+  document.getElementById('preBtnSat')?.classList.toggle('on',tipo==='sat');
+}
+
+function publicRecords(){
+  return (window._inds||[]).filter(i=>!isHiddenRecord(i));
+}
+function evaluatedRecords(){
+  return publicRecords().filter(i=>!isPreIdentificada(i));
+}
+function haversineM(aLat,aLng,bLat,bLng){
+  const R=6371000, toR=x=>x*Math.PI/180;
+  const dLat=toR(bLat-aLat), dLng=toR(bLng-aLng);
+  const q=Math.sin(dLat/2)**2+Math.cos(toR(aLat))*Math.cos(toR(bLat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(q));
+}
+function cleanUUID(v){
+  return String(v||'').trim().replace(/[{}]/g,'');
+}
+function parseGeoNumber(v){
+  if(typeof v==='number') return v;
+  if(v==null) return NaN;
+  return Number(String(v).trim().replace(',','.'));
+}
+function getPropCI(obj, names){
+  const keys=Object.keys(obj||{});
+  for(const n of names){
+    const k=keys.find(k=>k.toLowerCase()===n.toLowerCase());
+    if(k!=null) return obj[k];
+  }
+  return undefined;
+}
+function latLngTo31981(lat,lng){
+  try{
+    if(typeof proj4!=='function') return null;
+    if(!proj4.defs('EPSG:31981')){
+      proj4.defs('EPSG:31981','+proj=utm +zone=21 +south +ellps=GRS80 +units=m +no_defs +type=crs');
+    }
+    const xy=proj4('EPSG:4326','EPSG:31981',[Number(lng),Number(lat)]);
+    if(!xy||!Number.isFinite(xy[0])||!Number.isFinite(xy[1])) return null;
+    return {x:xy[0],y:xy[1]};
+  }catch(e){console.warn('Conversão 31981 falhou',e);return null;}
+}
+function buildPublicTreeId(lat,lng,uuid){
+  const xy=latLngTo31981(lat,lng);
+  const suf=cleanUUID(uuid).replace(/-/g,'').slice(0,4).toUpperCase()||'0000';
+  if(xy) return 'ARB-31981-'+Math.round(xy.x)+'-'+Math.round(xy.y)+'-'+suf;
+  return 'ARB-4326-'+Math.abs(Number(lat)).toFixed(5)+'-'+Math.abs(Number(lng)).toFixed(5)+'-'+suf;
+}
+let _legacyMigrationStarted=false;
+async function migrateLegacyRecords(){
+  if(_legacyMigrationStarted||!window._FB||!window._FB.upd||!Array.isArray(window._inds)) return;
+  _legacyMigrationStarted=true;
+  const antigos=window._inds.filter(i=>!isPreIdentificada(i)&&i._fid&&(!i.uuid||!i.id_publico));
+  if(!antigos.length) return;
+  let ok=0;
+  for(const old of antigos){
+    try{
+      const uuid=cleanUUID(old.uuid)||makeUUID();
+      const idPublico=old.id_publico||buildPublicTreeId(old.lat,old.lng,uuid);
+      const patch={
+        uuid,
+        id_publico:idPublico,
+        legacy_id:old.legacy_id||old.id||null,
+        status:old.status||'VALIDADA_CAMPO',
+        validado:old.validado!==false,
+        migrado_identidade_em:new Date().toISOString()
+      };
+      await window._FB.upd(old._fid,patch);
+      ok++;
+    }catch(e){console.error('Falha migrando identidade',old?.id,e);}
+  }
+  if(ok) showToast('✅ '+ok+' árvore(s) antiga(s) receberam UUID e ID público');
+}
+
+function featureToPreRecord(f, idx){
+  if(!f || !f.geometry || f.geometry.type!=='Point' || !Array.isArray(f.geometry.coordinates)) throw new Error('Feição '+(idx+1)+' não é Point.');
+  const p=f.properties||{};
+  let lng=parseGeoNumber(f.geometry.coordinates[0]), lat=parseGeoNumber(f.geometry.coordinates[1]);
+  let coordFonte='geometry';
+  const geomValida=Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;
+
+  if(!geomValida){
+    const propLng=parseGeoNumber(getPropCI(p,['longitude','lng','lon','long']));
+    const propLat=parseGeoNumber(getPropCI(p,['latitude','lat']));
+    const propsValidas=Number.isFinite(propLat)&&Number.isFinite(propLng)&&propLat>=-90&&propLat<=90&&propLng>=-180&&propLng<=180;
+    if(propsValidas){
+      lat=propLat; lng=propLng; coordFonte='atributos_latlon';
+    } else {
+      throw new Error('Coordenada inválida na feição '+(idx+1)+'. A geometria não está em longitude/latitude e os campos longitude/latitude também não são válidos.');
+    }
+  }
+
+  const uuid=cleanUUID(p.uuid||p.uuid_arvore||p.uuid_full)||makeUUID();
+  const suffix=uuid.replace(/-/g,'').slice(0,4).toUpperCase();
+  const idPublico=String(p.id_publico||p.id_arvore||p.codigo||'').trim() || ('ARB-4326-'+Math.abs(lat).toFixed(5)+'-'+Math.abs(lng).toFixed(5)+'-'+suffix);
+  return {
+    id:idPublico, id_publico:idPublico, uuid,
+    lat, lng, lat_pre:lat, lng_pre:lng, lat_campo:null, lng_campo:null, acc_campo:null, coordFonte,
+    x_utm:p.x_utm??p.x??null, y_utm:p.y_utm??p.y??null,
+    epsg_origem:String(p.epsg_origem||document.getElementById('pi_epsg')?.value||''),
+    preOrigem:String(p.origem||p.preOrigem||'IA').toUpperCase(),
+    score:p.score??p.conf_ia??null,
+    status:'PRE_IDENTIFICADA', preIdentificada:true, validado:false,
+    nome:'', sci:'', familia:'',
+    campanha:document.getElementById('pi_campanha')?.value.trim()||'Pré-identificação',
+    dataImagem:document.getElementById('pi_dataimg')?.value||null,
+    resolucaoCm:parseFloat(document.getElementById('pi_res')?.value)||null,
+    metodo:document.getElementById('pi_modelo')?.value.trim()||'GeoAI / DeepForest',
+    software:document.getElementById('pi_soft')?.value.trim()||'QGIS',
+    parametros:{
+      patchSize:parseFloat(document.getElementById('pi_patch')?.value)||null,
+      scoreThreshold:parseFloat(document.getElementById('pi_score')?.value)||null,
+      patchOverlap:parseFloat(document.getElementById('pi_overlap')?.value)||null,
+      iouThreshold:parseFloat(document.getElementById('pi_iou')?.value)||null
+    },
+    importadoEm:new Date().toISOString(),
+    ts:new Date().toISOString()
+  };
+}
+function initPreIdMap(){
+  if(preidMap){setTimeout(()=>preidMap.invalidateSize(),100);return;}
+  const el=document.getElementById('preidMap'); if(!el)return;
+  preidMap=L.map('preidMap',{zoomControl:true,maxZoom:22}).setView([-16.0713,-57.6826],14);
+
+  window._preOsm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
+  });
+
+  window._preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
+    maxNativeZoom:16,
+    maxZoom:22
+  });
+
+  window._preSat.addTo(preidMap);
+}
+function renderPreIdPreview(){
+  initPreIdMap();
+  if(preidLayer){preidMap.removeLayer(preidLayer);preidLayer=null;}
+  const fg=L.featureGroup();
+  _preidPreview.forEach((r,i)=>{
+    const dup=_preidDuplicates.includes(i);
+    const m=L.circleMarker([r.lat,r.lng],{radius:6,color:dup?'#dc2626':'#2563eb',weight:2,fillColor:dup?'#fecaca':'#93c5fd',fillOpacity:.85});
+    m.bindTooltip((dup?'Possível duplicata · ':'')+r.id_publico);
+    fg.addLayer(m);
+  });
+  preidLayer=fg.addTo(preidMap);
+  if(fg.getLayers().length) preidMap.fitBounds(fg.getBounds().pad(.2));
+  setTimeout(()=>preidMap.invalidateSize(),150);
+}
+async function handlePreIdFile(ev){
+  const file=ev.target.files?.[0]; if(!file)return;
+  const st=document.getElementById('preidFileStatus');
+  st.style.display='block'; st.className='preid-ok'; st.textContent='Lendo '+file.name+'...';
+  try{
+    const txt=await file.text();
+    const geo=JSON.parse(txt);
+    if(geo.type!=='FeatureCollection'||!Array.isArray(geo.features)) throw new Error('O arquivo precisa ser um GeoJSON FeatureCollection.');
+    const rows=geo.features.map(featureToPreRecord);
+    const ids=new Set(), uuids=new Set(), internalDup=[];
+    rows.forEach((r,i)=>{if(ids.has(r.id_publico)||uuids.has(r.uuid))internalDup.push(i); ids.add(r.id_publico);uuids.add(r.uuid);});
+    const existing=publicRecords();
+    const dup=[];
+    rows.forEach((r,i)=>{
+      const byId=existing.some(e=>e.id_publico===r.id_publico||e.id===r.id_publico||(e.uuid&&cleanUUID(e.uuid)===r.uuid));
+      const byNear=existing.some(e=>Number.isFinite(Number(e.lat))&&Number.isFinite(Number(e.lng))&&haversineM(r.lat,r.lng,Number(e.lat),Number(e.lng))<=2.5);
+      if(byId||byNear||internalDup.includes(i)) dup.push(i);
+    });
+    _preidParsed=geo; _preidPreview=rows; _preidDuplicates=dup;
+    const ia=rows.filter(r=>r.preOrigem==='IA').length, man=rows.filter(r=>r.preOrigem==='MANUAL').length;
+    document.getElementById('preidSummary').innerHTML=
+      '<div class="preid-kpi"><b>'+rows.length+'</b><span>Pontos</span></div>'+
+      '<div class="preid-kpi"><b>'+ia+'</b><span>Origem IA</span></div>'+
+      '<div class="preid-kpi"><b>'+man+'</b><span>Manuais</span></div>'+
+      '<div class="preid-kpi"><b>'+dup.length+'</b><span>Duplicatas/suspeitas</span></div>';
+    const fallbackCount=rows.filter(r=>r.coordFonte==='atributos_latlon').length;
+    document.getElementById('preidMessages').innerHTML =
+      (dup.length?'<div class="preid-warn">⚠️ '+dup.length+' ponto(s) coincidem com UUID/ID existente ou estão a até 2,5 m de um registro já cadastrado. Eles serão <b>ignorados</b> na importação.</div>':'<div class="preid-ok">✅ Nenhuma duplicidade evidente encontrada.</div>')+
+      '<div class="preid-ok">✅ GeoJSON válido · geometrias Point · coordenadas utilizáveis.</div>'+
+      (fallbackCount?'<div class="preid-warn">ℹ️ Em '+fallbackCount+' feição(ões), a geometria não estava em longitude/latitude. O importador usou os campos <b>longitude</b> e <b>latitude</b> do arquivo.</div>':'');
+    document.getElementById('preidPreviewCard').style.display='block';
+    st.className='preid-ok'; st.innerHTML='✅ <b>'+file.name+'</b> · '+rows.length+' feições lidas';
+    setTimeout(renderPreIdPreview,50);
+  }catch(e){
+    _preidParsed=null;_preidPreview=[];_preidDuplicates=[];
+    st.className='preid-warn';st.textContent='❌ '+e.message;
+    document.getElementById('preidPreviewCard').style.display='none';
+  }
+}
+function resetPreIdImport(){
+  _preidParsed=null;_preidPreview=[];_preidDuplicates=[];
+  const fi=document.getElementById('preidFile'); if(fi)fi.value='';
+  document.getElementById('preidFileStatus').style.display='none';
+  document.getElementById('preidPreviewCard').style.display='none';
+  if(preidLayer&&preidMap){preidMap.removeLayer(preidLayer);preidLayer=null;}
+}
+async function confirmPreIdImport(){
+  if(!_preidPreview.length){showToast('⚠️ Selecione um GeoJSON');return;}
+  // Recalcula duplicidades no momento da importação, porque pode haver importação parcial anterior.
+  const existentes=publicRecords();
+  const novos=_preidPreview.filter(r=>{
+    return !existentes.some(e=>{
+      const mesmoId=(e.id_publico&&e.id_publico===r.id_publico)||(e.id===r.id_publico);
+      const mesmoUuid=e.uuid&&cleanUUID(e.uuid)===cleanUUID(r.uuid);
+      const perto=Number.isFinite(Number(e.lat))&&Number.isFinite(Number(e.lng))&&haversineM(r.lat,r.lng,Number(e.lat),Number(e.lng))<=2.5;
+      return mesmoId||mesmoUuid||perto;
+    });
+  });
+  if(!novos.length){showToast('ℹ️ Todos os pontos deste arquivo já estão no banco');return;}
+
+  const btn=document.getElementById('preidImportBtn');
+  btn.disabled=true;
+  let gravados=0;
+  try{
+    if(window._FB&&window._FB.addMany){
+      await window._FB.addMany(novos,(feito,total)=>{
+        gravados=feito;
+        btn.textContent='Importando '+feito+'/'+total+'...';
+      });
+    } else {
+      for(let i=0;i<novos.length;i++){
+        window._inds=(window._inds||[]).concat([novos[i]]);
+        gravados=i+1;
+        btn.textContent='Importando '+gravados+'/'+novos.length+'...';
+      }
+      saveLocal();renderAll();
+    }
+    showToast('✅ '+gravados+' pré-identificações importadas');
+    resetPreIdImport();
+    goScreen('map');
+    setTimeout(()=>{if(novos[0]&&map)map.flyTo([novos[0].lat,novos[0].lng],18,{duration:1});},300);
+  }catch(e){
+    console.error('Falha importação GeoJSON',e);
+    showToast('⚠️ Importação parcial: '+gravados+' salva(s). '+e.message,7000);
+    const msg=document.getElementById('preidMessages');
+    if(msg) msg.innerHTML += '<div class="preid-warn">⚠️ A importação parou após <b>'+gravados+'</b> novo(s) registro(s). Recarregue a página e selecione o mesmo arquivo: o sistema detectará os já salvos e continuará somente com os restantes.<br><small>'+String(e.message||'Erro desconhecido')+'</small></div>';
+  } finally {
+    btn.disabled=false;
+    btn.textContent='Importar somente novos';
+  }
+}
+
+function mkPreIcon(ind){
+  return L.divIcon({className:'',html:'<div style="position:relative"><div class="pre-marker">?</div><div style="position:absolute;top:28px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:8px;font-weight:800;padding:2px 5px;border-radius:99px;white-space:nowrap;">PRÉ-ID</div></div>',iconSize:[28,40],iconAnchor:[14,28]});
+}
+function openPreSheet(ind){
+  const ph=document.getElementById('shPhoto');
+  ph.innerHTML='<div style="height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#dbeafe,#ecfdf5);font-size:64px;">🌳</div>';
+  document.getElementById('shBody').innerHTML=
+    '<div class="sheet-id">'+(ind.id_publico||ind.id)+'</div>'+
+    '<div class="sheet-name">Árvore pré-identificada</div>'+
+    '<div class="sheet-sci">Aguardando validação em campo</div>'+
+    '<div class="sec"><div class="sec-title">Status</div><div class="preid-ok">🛰️ Detectada em imagem aérea e ainda não avaliada presencialmente.</div>'+
+    '<div class="kv"><span class="kv-k">Origem:</span><span class="kv-v">'+(ind.preOrigem||'IA')+'</span></div>'+
+    '<div class="kv"><span class="kv-k">Campanha:</span><span class="kv-v">'+(ind.campanha||'—')+'</span></div>'+
+    '<div class="kv"><span class="kv-k">Score IA:</span><span class="kv-v">'+(ind.score??'—')+'</span></div></div>'+
+    '<div class="sec"><div class="sec-title">Localização estimada</div><div class="coords">📍 '+Number(ind.lat_pre??ind.lat).toFixed(7)+', '+Number(ind.lng_pre??ind.lng).toFixed(7)+'</div><div style="margin-top:7px;font-size:11.5px;color:#64748b;line-height:1.5;">🔵 O círculo azul representa uma incerteza visual de aproximadamente 5 m. A posição inicial vem do centroide da detecção na ortofoto; a coordenada de campo será armazenada separadamente após a validação.</div></div>'+
+    '<div class="sec"><div class="sec-title">O que falta</div><div style="font-size:12.5px;line-height:1.9;color:#344e41;">☐ Confirmar existência<br>☐ Fotografia<br>☐ Espécie<br>☐ Circunferência / DAP<br>☐ Saúde e manejo</div></div>';
+  const edit=document.getElementById('shEditBtn'); edit.style.display='flex';edit.style.background='#2563eb';edit.style.color='#fff';edit.textContent='🌿 Validar esta árvore';edit.onclick=()=>{closeSheet();startEdit(ind.id);};
+  const del=document.getElementById('shDelBtn');del.style.display='none';
+  const mp=document.getElementById('shMapBtn');mp.style.display='flex';mp.onclick=()=>{closeSheet();goScreen('map');setTimeout(()=>map.flyTo([ind.lat,ind.lng],19,{duration:1}),100);};
+  document.getElementById('shOverlay').classList.add('open');document.getElementById('sheet').classList.add('open');
+}
+
 
 // ═══════ SCREENS ═══════
 function goScreen(name) {
@@ -1484,6 +1926,7 @@ function goScreen(name) {
   const nb = document.getElementById('nb-'+name) || document.getElementById('nb-about');
   if (nb && (name==='sobre'||document.getElementById('nb-'+name))) nb.classList.add('on');
   if (name==='map') { setTimeout(()=>map&&map.invalidateSize(),100); }
+  if (name==='preid') { setTimeout(initPreIdMap,120); }
   if (name==='list') { renderList(); }
   if (name==='add') { initForm(); } // form
   if (name==='sobre') { buildOrientandos(); }
@@ -1576,11 +2019,19 @@ function confirmPin(){
 }
 
 window.addEventListener('load', ()=>{
-  map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30}).setView([-16.0713,-57.6826],14);
-  // CartoDB Voyager — sem restrição de referer, funciona em arquivo local
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-    attribution:'© OpenStreetMap · © CartoDB',maxZoom:19,subdomains:'abcd'
-  }).addTo(map);
+  map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30,maxZoom:22}).setView([-16.0713,-57.6826],14);
+
+  window._osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
+  });
+
+  window._satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
+    maxNativeZoom:16,
+    maxZoom:22
+  });
+
+  window._osmBase.addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
 
   // Mira central (crosshair)
@@ -1655,9 +2106,17 @@ function mkIcon(ind){
 
 function renderMarkers(){
   Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
-  (window._inds||[]).forEach(ind=>{
+  preHalos.forEach(h=>map.removeLayer(h)); preHalos=[];
+  publicRecords().forEach(ind=>{
     if(!ind.lat||!ind.lng)return;
-    const m=L.marker([ind.lat,ind.lng],{icon:mkIcon(ind)});
+    if(isPreIdentificada(ind)){
+      const h=L.circle([ind.lat,ind.lng],{
+        radius:5,color:'#2563eb',weight:1.5,opacity:.7,
+        fillColor:'#60a5fa',fillOpacity:.14,interactive:false
+      }).addTo(map);
+      preHalos.push(h);
+    }
+    const m=L.marker([ind.lat,ind.lng],{icon:isPreIdentificada(ind)?mkPreIcon(ind):mkIcon(ind)});
     m.on('click',()=>openSheet(ind.id));
     m.addTo(map); markers[ind.id]=m;
   });
@@ -1667,8 +2126,8 @@ function renderMarkers(){
 function renderList(){
   const el=document.getElementById('itemList');
   const q=(document.getElementById('searchIn').value||'').toLowerCase();
-  const inds=(window._inds||[]).filter(i=>{
-    const ms=!q||[i.nome,i.sci,i.familia,i.bairro].join(' ').toLowerCase().includes(q);
+  const inds=publicRecords().filter(i=>{
+    const ms=!q||[i.nome||'',i.sci||'',i.familia||'',i.bairro||'',i.id||'',i.id_publico||''].join(' ').toLowerCase().includes(q);
     const n=i.saudeNota;
     const mf=aFilt==='todos'
       ||(aFilt==='bom'&&(n||0)>=7)
@@ -1690,15 +2149,15 @@ function renderList(){
     d.innerHTML=`<div class="tcard-accent" style="background:${c}"></div>
     <div class="tcard-thumb">${i.foto?`<img src="${i.foto}">`:'🌳'}</div>
     <div class="tcard-body">
-      <div class="tcard-name">${i.nome}</div>
-      <div class="tcard-sci">${i.sci||'—'}</div>
+      <div class="tcard-name">${isPreIdentificada(i)?'Árvore pré-identificada':(i.nome||'Árvore')}</div>
+      <div class="tcard-sci">${isPreIdentificada(i)?'Aguardando validação':(i.sci||'—')}</div>
       <div class="tcard-badges">
-        ${n!=null?`<span class="bdg ${scl}">${sl} ${n.toFixed(1)}</span>`:''}
+        ${isPreIdentificada(i)?'<span class="pre-badge">🛰️ Pré-ID</span>':(n!=null?`<span class="bdg ${scl}">${sl} ${n.toFixed(1)}</span>`:'')}
         ${i.orig?`<span class="bdg ${obc[i.orig]||'bdg-nat'}">${obm[i.orig]||i.orig}</span>`:''}
         ${(i.servicos||[]).includes('fruto_humano')?'<span class="bdg bdg-fr">🍎 Fruto</span>':''}
         ${i.carbKg?`<span class="bdg bdg-c">🌍 ${Math.round(i.carbKg)}kg</span>`:''}
       </div>
-      <div class="tcard-meta">${i.id} · ${i.bairro||'—'} · ${i.data||'—'}</div>
+      <div class="tcard-meta">${i.id_publico||i.id} · ${i.bairro||'—'} · ${i.data||'—'}${i.legacy_id?' · '+i.legacy_id:''}</div>
     </div>
     ${n!=null?`<div class="tcard-score"><div class="score-num" style="color:${c}">${n.toFixed(1)}</div><div class="score-lbl">/10</div></div>`:''}`;
     el.appendChild(d);
@@ -1708,8 +2167,10 @@ function setFilter(f,el){aFilt=f;document.querySelectorAll('.chip').forEach(c=>c
 
 // ═══════ STATS ═══════
 function updateStats(){
-  const inds=window._inds||[];
+  const inds=evaluatedRecords();
+  const pre=publicRecords().filter(isPreIdentificada);
   document.getElementById('sT').textContent=inds.length;
+  document.getElementById('sP').textContent=pre.length;
   document.getElementById('sB').textContent=inds.filter(i=>(i.saudeNota||0)>=7).length;
   document.getElementById('sC').textContent=inds.filter(i=>i.saudeNota!=null&&i.saudeNota<4).length;
   document.getElementById('sN').textContent=inds.filter(i=>['nativa_pantanal','nativa_brasil'].includes(i.orig)).length;
@@ -1730,6 +2191,7 @@ function renderAll(){
 function openSheet(id){
   selId=id;
   const ind=(window._inds||[]).find(i=>i.id===id); if(!ind) return;
+  if(isPreIdentificada(ind)){ openPreSheet(ind); return; }
   const ph=document.getElementById('shPhoto');
   ph.innerHTML=ind.foto?`<img src="${ind.foto}">`:'<span style="font-size:56px">🌳</span>';
   const n=ind.saudeNota; const c=mkColor(n);
@@ -1739,7 +2201,7 @@ function openSheet(id){
   let crH=''; if(ind.saudeDetalhes) CRIT.forEach(cr=>{const v=ind.saudeDetalhes[cr.k];if(v==null)return;const cc=v>=3?'#2d6a4f':v>=2?'#e9a833':'#e05252';crH+=`<div class="crit-card"><div class="crit-name">${cr.l}</div><div class="crit-score" style="color:${cc}">${v}/4</div></div>`;});
 
   document.getElementById('shBody').innerHTML=`
-  <div class="sheet-id">${ind.id} · ${ind.data||'—'}</div>
+  <div class="sheet-id">${ind.id_publico||ind.id} · ${ind.data||'—'}${ind.legacy_id?' · legado '+ind.legacy_id:''}</div>
   <div class="sheet-name">${ind.nome}</div>
   <div class="sheet-sci">${ind.sci||'—'} ${ind.familia?'· '+ind.familia:''}</div>
 
@@ -2300,7 +2762,7 @@ function fillFormFromInd(ind){
   document.getElementById('f_lng').value = ind.lng;
   document.getElementById('gpsInfo').textContent = '📍 Coordenadas do registro original';
   autoCalc();
-  showToast('✏️ Editando '+ind.id+' — '+ind.nome);
+  showToast(isPreIdentificada(ind)?'🌿 Validando '+ind.id:'✏️ Editando '+ind.id+' — '+(ind.nome||''));
 }
 
 // ── BANCO DE DENSIDADE POR GÊNERO/ESPÉCIE (g/cm³) ──────────────────────
@@ -2906,6 +3368,10 @@ Nos servicos, inclua APENAS os que se aplicam à espécie identificada, da lista
         4. Cole o código do arquivo <code>supabase-function.ts</code><br>
         5. Em <b>Settings → Secrets</b> adicione <code>ANTHROPIC_API_KEY</code><br>
         6. Copie a URL da função e me mande — atualizo em 1 minuto!`;
+    } else if(/api.?key|required|anthropic/i.test(msg)) {
+      showToast('ℹ️ A IA por foto não está configurada. A pré-identificação por GeoJSON continua funcionando.');
+      const cw=document.getElementById('corsWarning');
+      if(cw){cw.style.display='block';cw.innerHTML='<b>ℹ️ Identificação automática por foto indisponível neste teste.</b><br>Isso não afeta o mapa, o Firebase nem a importação de pré-identificações do QGIS. Você pode escolher a espécie manualmente ou continuar a validação sem usar IA por foto.';}
     } else {
       showToast('⚠️ ' + msg.substring(0,70));
     }
@@ -3045,20 +3511,49 @@ async function saveInd(){
   };
   showToast('💾 Salvando...');
   if(_editId){
-    // Edição — substituir localmente ou no Firebase
+    const old = (window._inds||[]).find(i=>i.id===_editId);
     ind.id = _editId;
-    if(window._FB && window._inds){
-      const old = (window._inds||[]).find(i=>i.id===_editId);
-      if(old && old._fid){
-        try{ await window._FB.del(old._fid); }catch(e){}
-      }
+    if(old){
+      ind.uuid = cleanUUID(old.uuid)||makeUUID();
+      ind.id_publico = old.id_publico||old.id;
+      ind.legacy_id = old.legacy_id||null;
+      ind.lat_pre = old.lat_pre??old.lat??null;
+      ind.lng_pre = old.lng_pre??old.lng??null;
+      ind.lat_campo = lat;
+      ind.lng_campo = lng;
+      ind.acc_campo = document.getElementById('f_acc').value||null;
+      ind.preOrigem = old.preOrigem||old.origem_preid||null;
+      ind.campanha = old.campanha||null;
+      ind.dataImagem = old.dataImagem||null;
+      ind.metodo = old.metodo||null;
+      ind.software = old.software||null;
+      ind.parametros = old.parametros||null;
+      ind.status = 'VALIDADA_CAMPO';
+      ind.preIdentificada = false;
+      ind.validado = true;
+      ind.tsValidacao = new Date().toISOString();
+    }
+    if(window._FB && old && old._fid && window._FB.upd){
+      await window._FB.upd(old._fid, ind);
     } else {
-      window._inds = (window._inds||[]).filter(i=>i.id!==_editId);
+      window._inds = (window._inds||[]).map(x=>x.id===_editId?ind:x);
+      saveLocal(); renderAll();
     }
     _editId = null;
     const sb = document.querySelector('.submit-btn');
     if(sb){ sb.textContent='💾 Registrar Indivíduo no Cadastro'; sb.style.background=''; }
+    showToast('✅ '+ind.id+' atualizado e validado!');
+    resetForm(); goScreen('list');
+    return;
   }
+  ind.uuid = makeUUID();
+  ind.legacy_id = ind.id;
+  ind.id_publico = buildPublicTreeId(ind.lat,ind.lng,ind.uuid);
+  ind.lat_campo = ind.lat;
+  ind.lng_campo = ind.lng;
+  ind.acc_campo = ind.acc||null;
+  ind.status = 'VALIDADA_CAMPO';
+  ind.validado = true;
   await addInd(ind);
   showToast(`✅ ${ind.id} — ${ind.nome} salvo!`);
   resetForm(); goScreen('list');
@@ -3251,7 +3746,7 @@ function exportGeoJSON(){
       type:'Feature',
       geometry:{type:'Point',coordinates:[parseFloat(i.lng),parseFloat(i.lat)]},
       properties:{
-        codigo:i.id, nome:i.nome, cientifico:i.sci||'', familia:i.familia||'',
+        codigo:i.id, id_publico:i.id_publico||i.id, uuid:i.uuid||'', status:i.status||(isPreIdentificada(i)?'PRE_IDENTIFICADA':'VALIDADA_CAMPO'), pre_origem:i.preOrigem||'', nome:i.nome||'', cientifico:i.sci||'', familia:i.familia||'',
         origem:i.orig||'', bairro:i.bairro||'', data:i.data||'',
         dap_cm:i.dap||null, altura_m:i.ht||null, sombra_m2:i.sombra||null,
         carbono_kg:i.carbKg||null, saude:i.saudeNota!=null?i.saudeNota:null,
@@ -3265,7 +3760,7 @@ function exportGeoJSON(){
 
 // ═══════ DASHBOARD ═══════
 function renderDashboard(){
-  const inds = window._inds || [];
+  const inds = evaluatedRecords();
   const el = document.getElementById('dashContent');
   const atuel = document.getElementById('dashAtualizado');
   if(atuel) atuel.textContent = 'Atualizado em ' + new Date().toLocaleString('pt-BR');
@@ -3517,10 +4012,7 @@ function renderDashboard(){
 
 // ═══════ CFG ═══════
 function saveCfg(){
-  const cfg={apiKey:document.getElementById('c_key').value.trim(),projectId:document.getElementById('c_pid').value.trim(),authDomain:document.getElementById('c_dom').value.trim(),appId:document.getElementById('c_app').value.trim()};
-  if(!cfg.apiKey){showToast('⚠️ API Key obrigatória');return;}
-  localStorage.setItem('cpfverde_fb',JSON.stringify(cfg));
-  showToast('✅ Salvo! Recarregue para conectar ao Firebase.');
+  showToast('ℹ️ O Firebase deste site já está configurado no código. Nenhuma API Key precisa ser informada pelo usuário.');
 }
 
 // ═══════ TOAST ═══════
