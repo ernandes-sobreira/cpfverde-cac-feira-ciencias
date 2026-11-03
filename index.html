@@ -1636,8 +1636,18 @@ try {
   document.getElementById('fbTxt').textContent = 'Firebase conectado ✅ cpfverde-cac';
   window._FB.listen(inds => {
     window._inds = inds;
+    window._usingMapCache = false;
     window._firestoreLoaded = true;
-    try{ renderAll(); }catch(e){ console.warn('Dados chegaram antes da interface ficar pronta:',e); }
+    saveMapCache(inds);
+
+    // Prioridade máxima: mapa e contadores. A lista com fotos só é montada se estiver aberta.
+    try{
+      renderMarkers();
+      updateStats();
+      const list=document.getElementById('screen-list');
+      if(list && list.classList.contains('on')) renderList();
+    }catch(e){ console.warn('Dados chegaram antes da interface ficar pronta:',e); }
+
     setTimeout(()=>{ try{ migrateLegacyRecords(); }catch(e){ console.warn(e); } },300);
     const dash = document.getElementById('screen-dash');
     const exp = document.getElementById('screen-export');
@@ -1698,6 +1708,40 @@ function publicRecords(){
 function evaluatedRecords(){
   return publicRecords().filter(i=>!isPreIdentificada(i));
 }
+
+function lightweightTreeRecord(i){
+  return {
+    id:i.id||null,
+    id_publico:i.id_publico||i.id||null,
+    uuid:i.uuid||null,
+    lat:Number(i.lat),
+    lng:Number(i.lng),
+    saudeNota:i.saudeNota??null,
+    status:i.status||null,
+    preIdentificada:i.preIdentificada===true,
+    status_cadastro:i.status_cadastro||null,
+    nome:i.nome||'',
+    orig:i.orig||null,
+    carbKg:i.carbKg||0,
+    legacy_id:i.legacy_id||null
+  };
+}
+function saveMapCache(inds){
+  try{
+    const leves=(inds||[]).filter(i=>Number.isFinite(Number(i.lat))&&Number.isFinite(Number(i.lng))).map(lightweightTreeRecord);
+    localStorage.setItem('cpfverde_map_cache_v1',JSON.stringify({ts:Date.now(),inds:leves}));
+  }catch(e){ console.warn('Falha salvando cache leve do mapa',e); }
+}
+function loadMapCache(){
+  try{
+    const raw=localStorage.getItem('cpfverde_map_cache_v1');
+    if(!raw) return null;
+    const obj=JSON.parse(raw);
+    if(!obj||!Array.isArray(obj.inds)||!obj.inds.length) return null;
+    return obj.inds;
+  }catch(e){ return null; }
+}
+
 function haversineM(aLat,aLng,bLat,bLng){
   const R=6371000, toR=x=>x*Math.PI/180;
   const dLat=toR(bLat-aLat), dLng=toR(bLng-aLng);
@@ -2081,11 +2125,25 @@ window.addEventListener('load', ()=>{
 
   L.control.zoom({position:'bottomright'}).addTo(map);
 
+  // Mostra imediatamente a última camada leve salva no navegador.
+  // Depois o Firestore substitui por dados atuais.
+  try{
+    const cached=loadMapCache();
+    if(cached && (!window._inds || !window._inds.length)){
+      window._inds=cached;
+      window._usingMapCache=true;
+      renderMarkers();
+      updateStats();
+    }
+  }catch(e){ console.warn('Cache leve indisponível',e); }
+
   // Firestore pode responder antes do mapa terminar de nascer.
-  // Se os dados já chegaram, renderize novamente agora.
   setTimeout(()=>{
     if(window._inds){
-      try{ renderAll(); }catch(e){ console.error('Falha ao renderizar dados após iniciar mapa:',e); }
+      try{
+        renderMarkers();
+        updateStats();
+      }catch(e){ console.error('Falha ao renderizar dados após iniciar mapa:',e); }
     }
   },50);
 
@@ -2252,7 +2310,7 @@ function renderList(){
     const d=document.createElement('div'); d.className='tcard'+(i.id===selId?' sel':'');
     d.style.animationDelay=(idx*0.04)+'s'; d.onclick=()=>openSheet(i.id);
     d.innerHTML=`<div class="tcard-accent" style="background:${c}"></div>
-    <div class="tcard-thumb">${i.foto?`<img src="${i.foto}">`:'🌳'}</div>
+    <div class="tcard-thumb">${i.foto?`<img loading="lazy" decoding="async" src="${i.foto}">`:'🌳'}</div>
     <div class="tcard-body">
       <div class="tcard-name">${isPreIdentificada(i)?'Árvore pré-identificada':(i.nome||'Árvore')}</div>
       <div class="tcard-sci">${isPreIdentificada(i)?'Aguardando validação':(i.sci||'—')}</div>
@@ -2282,10 +2340,10 @@ function updateStats(){
   document.getElementById('sK').textContent=Math.round(inds.reduce((s,i)=>s+(i.carbKg||0),0));
 }
 function renderAll(){
-  renderList();
   renderMarkers();
   updateStats();
-  // Atualizar telas abertas
+  const list = document.getElementById('screen-list');
+  if(list && list.classList.contains('on')) renderList();
   const dash = document.getElementById('screen-dash');
   const exp = document.getElementById('screen-export');
   if(dash && dash.classList.contains('on')) renderDashboard();
