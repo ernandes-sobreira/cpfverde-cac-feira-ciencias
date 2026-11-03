@@ -498,6 +498,9 @@ body{display:flex;flex-direction:column;overflow:hidden;}
 .base-toggle button.on{background:#1b4332;color:#fff;}
 #mainBaseToggle{position:absolute;top:12px;right:12px;}
 #preBaseToggle{margin-top:8px;justify-content:center;}
+.tree-icon-fixed,.pre-icon-fixed{transform:none!important;zoom:1!important;}
+.tree-icon-fixed *,.pre-icon-fixed *{box-sizing:border-box;}
+
 .form-topbar{position:sticky;top:0;z-index:25;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-bottom:1px solid #dfe9e1;padding:9px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
 .form-back-btn{height:38px;padding:0 13px;border:1.5px solid #cbdacf;border-radius:10px;background:#fff;color:#1b4332;font-family:Nunito,sans-serif;font-size:13px;font-weight:800;cursor:pointer;}
 .form-top-title{font-size:14px;font-weight:900;color:#1b4332;flex:1;text-align:center;padding-right:72px;}
@@ -1213,7 +1216,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
     <div class="cfg-card">
       <div class="cfg-title">🪪 Identidade permanente das árvores</div>
-      <div class="cfg-desc">Registros antigos sem identidade nova recebem automaticamente um <b>UUID</b> e um <b>ID público ARB-31981-…</b>. O código antigo <b>CPF-xxx</b> é preservado em <code>legacy_id</code>.</div>
+      <div class="cfg-desc">Todos os indivíduos usam <b>ARB-…</b> como ID principal. Registros antigos com <b>CPF-xxx</b> são migrados permanentemente para o ID ARB; o código antigo é preservado somente em <code>legacy_id</code>.</div>
       <div style="background:#ecfdf5;border-radius:8px;padding:10px;font-size:12px;color:#166534;line-height:1.6;">A migração é idempotente: registros que já possuem UUID e ID público não são alterados novamente.</div>
     </div>
 
@@ -1655,6 +1658,7 @@ const CRIT = [
 const PESO_T = CRIT.reduce((s,c)=>s+c.p,0);
 
 let sVals={}, aFilt='todos', selId=null, markers={}, preHalos=[], photoB64=null, map, curScreen='map';
+let _draftUuid = null;
 
 let _preidParsed = null, _preidPreview = [], _preidDuplicates = [], preidMap = null, preidLayer = null;
 
@@ -1722,26 +1726,40 @@ let _legacyMigrationStarted=false;
 async function migrateLegacyRecords(){
   if(_legacyMigrationStarted||!window._FB||!window._FB.upd||!Array.isArray(window._inds)) return;
   _legacyMigrationStarted=true;
-  const antigos=window._inds.filter(i=>!isPreIdentificada(i)&&i._fid&&(!i.uuid||!i.id_publico));
+
+  // Migra qualquer árvore de campo que ainda use CPF-xxx como id principal
+  // ou que ainda não possua UUID / ID público.
+  const antigos=window._inds.filter(i=>{
+    if(isPreIdentificada(i)||!i._fid) return false;
+    const usaCpf=String(i.id||'').toUpperCase().startsWith('CPF-');
+    const idDiferente=i.id_publico && i.id!==i.id_publico;
+    return usaCpf||idDiferente||!i.uuid||!i.id_publico;
+  });
+
   if(!antigos.length) return;
   let ok=0;
   for(const old of antigos){
     try{
       const uuid=cleanUUID(old.uuid)||makeUUID();
       const idPublico=old.id_publico||buildPublicTreeId(old.lat,old.lng,uuid);
+      const legado=old.legacy_id || (String(old.id||'').toUpperCase().startsWith('CPF-') ? old.id : null);
+
       const patch={
         uuid,
         id_publico:idPublico,
-        legacy_id:old.legacy_id||old.id||null,
+        id:idPublico,
+        legacy_id:legado,
         status:old.status||'VALIDADA_CAMPO',
         validado:old.validado!==false,
         migrado_identidade_em:new Date().toISOString()
       };
       await window._FB.upd(old._fid,patch);
       ok++;
-    }catch(e){console.error('Falha migrando identidade',old?.id,e);}
+    }catch(e){
+      console.error('Falha migrando identidade',old?.id,e);
+    }
   }
-  if(ok) showToast('✅ '+ok+' árvore(s) antiga(s) receberam UUID e ID público');
+  if(ok) showToast('✅ '+ok+' árvore(s) migrada(s) definitivamente para ID ARB');
 }
 
 function featureToPreRecord(f, idx){
@@ -1906,7 +1924,7 @@ async function confirmPreIdImport(){
 }
 
 function mkPreIcon(ind){
-  return L.divIcon({className:'',html:'<div style="position:relative"><div class="pre-marker">?</div><div style="position:absolute;top:28px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:8px;font-weight:800;padding:2px 5px;border-radius:99px;white-space:nowrap;">PRÉ-ID</div></div>',iconSize:[28,40],iconAnchor:[14,28]});
+  return L.divIcon({className:'pre-icon-fixed',html:'<div style="position:relative;width:28px;height:40px"><div class="pre-marker">?</div><div style="position:absolute;top:28px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:8px;font-weight:800;padding:2px 5px;border-radius:99px;white-space:nowrap;">PRÉ-ID</div></div>',iconSize:[28,40],iconAnchor:[14,28]});
 }
 function openPreSheet(ind){
   const ph=document.getElementById('shPhoto');
@@ -2116,8 +2134,8 @@ function mkIcon(ind){
   const img = ind.foto
     ? `<img src="${ind.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
     : `<span style="transform:rotate(45deg);font-size:14px;">🌳</span>`;
-  return L.divIcon({className:'',
-    html:`<div style="position:relative;">
+  return L.divIcon({className:'tree-icon-fixed',
+    html:`<div style="position:relative;width:42px;height:42px;">
       <div style="width:42px;height:42px;border-radius:50% 50% 50% 0;background:${c};border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,.35);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;overflow:hidden;">
         <div style="transform:rotate(45deg);width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${img}</div>
       </div>
@@ -2133,9 +2151,9 @@ function renderMarkers(){
   publicRecords().forEach(ind=>{
     if(!ind.lat||!ind.lng)return;
     if(isPreIdentificada(ind)){
-      const h=L.circle([ind.lat,ind.lng],{
-        radius:5,color:'#2563eb',weight:1.5,opacity:.7,
-        fillColor:'#60a5fa',fillOpacity:.14,interactive:false
+      const h=L.circleMarker([ind.lat,ind.lng],{
+        radius:16,color:'#2563eb',weight:1.5,opacity:.65,
+        fillColor:'#60a5fa',fillOpacity:.10,interactive:false
       }).addTo(map);
       preHalos.push(h);
     }
@@ -2324,7 +2342,8 @@ function closeSheet(){
 // ═══════ FORM ═══════
 let _keepCoords = false;
 function initForm(){
-  // Mostrar próximo código e data
+  // Novo cadastro já nasce com identidade ARB; o código final depende das coordenadas.
+  if(!_editId) _draftUuid = makeUUID();
   const nextId = nxtId();
   const el = document.getElementById('codigoDisplay');
   const elData = document.getElementById('codigoData');
@@ -2779,7 +2798,7 @@ function fillFormFromInd(ind){
   // Serviços com níveis
   if(ind.svcNiveis){ Object.entries(ind.svcNiveis).forEach(([k,v])=>{ if(v!=null){ const btn=document.querySelector(`.score-btn[data-sk="${k}"][data-sv="${v}"]`); if(btn) setSvc(k,parseInt(v),btn); } }); }
   // Código
-  const cd=document.getElementById('codigoDisplay'); if(cd) cd.textContent=ind.id;
+  const cd=document.getElementById('codigoDisplay'); if(cd) cd.textContent=ind.id_publico||ind.id;
   const sb=document.querySelector('.submit-btn'); if(sb){ sb.textContent=isPreIdentificada(ind)?'✅ Revisar e validar esta árvore':'✅ Revisar e salvar edição'; sb.style.background='linear-gradient(135deg,#b45309,#d97706)'; }
   document.getElementById('f_lat').value = ind.lat;
   document.getElementById('f_lng').value = ind.lng;
@@ -3457,7 +3476,7 @@ function aplicarIA(d){
   },600);
   showToast('✅ IA preencheu o formulário — complete as métricas e saúde!');
 }
-function nxtId(){const ns=(window._inds||[]).map(i=>parseInt((i.id||'CPF-000').replace('CPF-',''))||0);return'CPF-'+String((ns.length?Math.max(...ns):0)+1).padStart(3,'0');}
+function nxtId(){ return 'ARB — será gerado ao salvar'; }
 
 function cancelTreeForm(){
   const hadEdit=!!_editId;
@@ -3490,7 +3509,7 @@ function openTreeConfirm(){
 
   const old=_editId?(window._inds||[]).find(i=>i.id===_editId):null;
   const modo=old&&isPreIdentificada(old)?'Validar árvore pré-identificada':(_editId?'Salvar edição':'Registrar nova árvore');
-  const codigo=(old?.id_publico||old?.id||document.getElementById('codigoDisplay')?.textContent||'—');
+  const codigo=(old?.id_publico||old?.id||buildPublicTreeId(lat,lng,_draftUuid||(_draftUuid=makeUUID())));
   const sci=document.getElementById('f_sci').value.trim()||'Não informado';
   const dap=document.getElementById('f_dap').value||'Não informado';
   const cap=document.getElementById('f_cap').value||'Não informado';
@@ -3535,7 +3554,7 @@ async function saveInd(){
   const colNome = document.getElementById('f_col').value.trim() || document.getElementById('f_col_quick').value.trim();
   if(colNome) localStorage.setItem('cpfverde_coletor', colNome);
   const ind={
-    id:nxtId(), nome, lat, lng,
+    id:null, nome, lat, lng,
     sci:document.getElementById('f_sci').value.trim(),
     familia:document.getElementById('f_fam').value.trim(),
     gen:document.getElementById('f_gen').value.trim(),
@@ -3601,10 +3620,11 @@ async function saveInd(){
   showToast('💾 Salvando...');
   if(_editId){
     const old = (window._inds||[]).find(i=>i.id===_editId);
-    ind.id = _editId;
+    ind.id = old?.id_publico||old?.id||_editId;
     if(old){
       ind.uuid = cleanUUID(old.uuid)||makeUUID();
       ind.id_publico = old.id_publico||old.id;
+      ind.id = ind.id_publico;
       ind.legacy_id = old.legacy_id||null;
       ind.lat_pre = old.lat_pre??old.lat??null;
       ind.lng_pre = old.lng_pre??old.lng??null;
@@ -3635,9 +3655,10 @@ async function saveInd(){
     resetForm(); goScreen('list');
     return;
   }
-  ind.uuid = makeUUID();
-  ind.legacy_id = ind.id;
+  ind.uuid = cleanUUID(_draftUuid)||makeUUID();
   ind.id_publico = buildPublicTreeId(ind.lat,ind.lng,ind.uuid);
+  ind.id = ind.id_publico;
+  ind.legacy_id = null;
   ind.lat_campo = ind.lat;
   ind.lng_campo = ind.lng;
   ind.acc_campo = ind.acc||null;
@@ -3661,6 +3682,7 @@ function resetForm(){
   extraPhotosB64=[]; renderExtraPhotos(); _iaData=null;
   svcVals={}; termoPhotos={};
   _editId=null;
+  _draftUuid=null;
   const sb=document.querySelector('.submit-btn');
   if(sb){sb.textContent='✅ Revisar e confirmar cadastro';sb.style.background='';}
   const td=['f_t_sombra','f_t_sol','f_t_reducao','f_t_hora','f_t_ceu'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
