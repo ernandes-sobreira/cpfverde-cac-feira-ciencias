@@ -1608,19 +1608,29 @@ try {
     },
     upd: (id,d) => updateDoc(doc(db,'cpfverde', id), d),
     del: (id) => deleteDoc(doc(db,'cpfverde', id)),
-    listen: (cb) => onSnapshot(collection(db,'cpfverde'), s => cb(s.docs.map(d=>({...d.data(), _fid:d.id}))))
+    listen: (cb, onErr) => onSnapshot(
+      collection(db,'cpfverde'),
+      s => cb(s.docs.map(d=>({...d.data(), _fid:d.id}))),
+      err => { console.error('Firestore listen erro:',err); if(onErr) onErr(err); }
+    )
   };
   document.getElementById('fbDot').classList.add('on');
   document.getElementById('fbTxt').textContent = 'Firebase conectado ✅ cpfverde-cac';
   window._FB.listen(inds => {
     window._inds = inds;
-    renderAll();
-    setTimeout(migrateLegacyRecords,120);
-    // Se dashboard ou export já abertos, atualizar
+    window._firestoreLoaded = true;
+    try{ renderAll(); }catch(e){ console.warn('Dados chegaram antes da interface ficar pronta:',e); }
+    setTimeout(()=>{ try{ migrateLegacyRecords(); }catch(e){ console.warn(e); } },300);
     const dash = document.getElementById('screen-dash');
     const exp = document.getElementById('screen-export');
-    if(dash && dash.classList.contains('on')) renderDashboard();
-    if(exp && exp.classList.contains('on')) atualizarResumo();
+    if(dash && dash.classList.contains('on')) setTimeout(renderDashboard,50);
+    if(exp && exp.classList.contains('on')) setTimeout(atualizarResumo,50);
+  }, err => {
+    window._firestoreLoaded = false;
+    document.getElementById('fbDot')?.classList.add('err');
+    const txt=document.getElementById('fbTxt');
+    if(txt) txt.textContent='Erro Firestore: '+(err.code||err.message||'falha de conexão');
+    showToast('⚠️ Não foi possível carregar os dados do Firestore',6000);
   });
 } catch(e) {
   console.error('Firebase erro:', e);
@@ -2038,6 +2048,14 @@ window.addEventListener('load', ()=>{
 
   L.control.zoom({position:'bottomright'}).addTo(map);
 
+  // Firestore pode responder antes do mapa terminar de nascer.
+  // Se os dados já chegaram, renderize novamente agora.
+  setTimeout(()=>{
+    if(window._inds){
+      try{ renderAll(); }catch(e){ console.error('Falha ao renderizar dados após iniciar mapa:',e); }
+    }
+  },50);
+
   // Mira central (crosshair)
   const mapEl = document.getElementById('map');
   crosshair = document.createElement('div');
@@ -2109,6 +2127,7 @@ function mkIcon(ind){
 }
 
 function renderMarkers(){
+  if(!map) return;
   Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
   preHalos.forEach(h=>map.removeLayer(h)); preHalos=[];
   publicRecords().forEach(ind=>{
@@ -3837,7 +3856,13 @@ function renderDashboard(){
   if(!el) return;
 
   if(!inds.length){
-    el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#aaa;"><div style="font-size:44px;margin-bottom:10px;">🌱</div><div style="font-size:15px;">Nenhum indivíduo cadastrado ainda.<br>Cadastre árvores para ver as análises.</div></div>';
+    if(window._firestoreLoaded===false){
+      el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#b45309;"><div style="font-size:44px;margin-bottom:10px;">⚠️</div><div style="font-size:15px;font-weight:800;">Não foi possível carregar o banco.</div><div style="font-size:12px;margin-top:6px;">Veja Configurações → Firebase para o erro de conexão.</div></div>';
+    }else if(window._firestoreLoaded!==true){
+      el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#64748b;"><div style="font-size:36px;margin-bottom:10px;">⏳</div><div style="font-size:15px;">Carregando dados do Firestore...</div></div>';
+    }else{
+      el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#aaa;"><div style="font-size:44px;margin-bottom:10px;">🌱</div><div style="font-size:15px;">Nenhum indivíduo encontrado no banco.</div></div>';
+    }
     return;
   }
 
