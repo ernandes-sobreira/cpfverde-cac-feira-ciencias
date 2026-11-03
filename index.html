@@ -165,6 +165,21 @@ body{display:flex;flex-direction:column;overflow:hidden;}
 .bdg-fr{background:#fef9c3;color:#713f12;}
 .bdg-c{background:#ede9fe;color:#5b21b6;}
 .tcard-meta{font-size:10px;color:var(--t4);margin-top:5px;}
+.tree-id-tooltip.leaflet-tooltip{
+  font-family:'Nunito',sans-serif;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.1px;
+  color:#173c2b;
+  background:rgba(255,255,255,.96);
+  border:1px solid rgba(27,67,50,.22);
+  border-radius:6px;
+  padding:4px 7px;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+  white-space:nowrap;
+}
+.tree-id-tooltip.leaflet-tooltip:before{display:none;}
+
 .tcard-score{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0 14px;gap:2px;flex-shrink:0;
@@ -1216,8 +1231,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
     <div class="cfg-card">
       <div class="cfg-title">🪪 Identidade permanente das árvores</div>
-      <div class="cfg-desc">Todos os indivíduos usam <b>ARB-…</b> como ID principal. Registros antigos com <b>CPF-xxx</b> são migrados permanentemente para o ID ARB; o código antigo é preservado somente em <code>legacy_id</code>.</div>
-      <div style="background:#ecfdf5;border-radius:8px;padding:10px;font-size:12px;color:#166534;line-height:1.6;">A migração é idempotente: registros que já possuem UUID e ID público não são alterados novamente.</div>
+      <div class="cfg-desc">Todos os indivíduos usam um <b>ID ARB-…</b> permanente como identificação principal.</div>
+      <div style="background:#ecfdf5;border-radius:8px;padding:10px;font-size:12px;color:#166534;line-height:1.6;">O ID permanece estável ao longo das validações e atualizações do cadastro.</div>
     </div>
 
     <div class="cfg-card">
@@ -1824,7 +1839,7 @@ function renderPreIdPreview(){
   _preidPreview.forEach((r,i)=>{
     const dup=_preidDuplicates.includes(i);
     const m=L.circleMarker([r.lat,r.lng],{radius:6,color:dup?'#dc2626':'#2563eb',weight:2,fillColor:dup?'#fecaca':'#93c5fd',fillOpacity:.85});
-    m.bindTooltip((dup?'Possível duplicata · ':'')+r.id_publico);
+    m.bindTooltip((dup?'Duplicata · ':'')+r.id_publico,{className:'tree-id-tooltip'});
     fg.addLayer(m);
   });
   preidLayer=fg.addTo(preidMap);
@@ -2175,7 +2190,11 @@ function renderMarkers(){
         fillColor:'#3b82f6',
         fillOpacity:.88
       });
-      m.bindTooltip('Pré-ID · '+(ind.id_publico||ind.id),{direction:'top',offset:[0,-4]});
+      m.bindTooltip(ind.id_publico||ind.id,{
+        direction:'top',
+        offset:[0,-4],
+        className:'tree-id-tooltip'
+      });
       m.on('click',()=>openSheet(ind.id));
       m.addTo(map);
       markers[ind.id]=m;
@@ -2191,10 +2210,11 @@ function renderMarkers(){
       fillColor:cor,
       fillOpacity:.92
     });
-    m.bindTooltip(
-      (ind.nome||'Árvore')+(ind.saudeNota!=null?' · '+ind.saudeNota.toFixed(1):''),
-      {direction:'top',offset:[0,-4]}
-    );
+    m.bindTooltip(ind.id_publico||ind.id,{
+      direction:'top',
+      offset:[0,-4],
+      className:'tree-id-tooltip'
+    });
     m.on('click',()=>openSheet(ind.id));
     m.addTo(map);
     markers[ind.id]=m;
@@ -2236,7 +2256,7 @@ function renderList(){
         ${(i.servicos||[]).includes('fruto_humano')?'<span class="bdg bdg-fr">🍎 Fruto</span>':''}
         ${i.carbKg?`<span class="bdg bdg-c">🌍 ${Math.round(i.carbKg)}kg</span>`:''}
       </div>
-      <div class="tcard-meta">${i.id_publico||i.id} · ${i.bairro||'—'} · ${i.data||'—'}${i.legacy_id?' · '+i.legacy_id:''}</div>
+      <div class="tcard-meta">${i.id_publico||i.id} · ${i.bairro||'—'} · ${i.data||'—'}</div>
     </div>
     ${n!=null?`<div class="tcard-score"><div class="score-num" style="color:${c}">${n.toFixed(1)}</div><div class="score-lbl">/10</div></div>`:''}`;
     el.appendChild(d);
@@ -2280,7 +2300,7 @@ function openSheet(id){
   let crH=''; if(ind.saudeDetalhes) CRIT.forEach(cr=>{const v=ind.saudeDetalhes[cr.k];if(v==null)return;const cc=v>=3?'#2d6a4f':v>=2?'#e9a833':'#e05252';crH+=`<div class="crit-card"><div class="crit-name">${cr.l}</div><div class="crit-score" style="color:${cc}">${v}/4</div></div>`;});
 
   document.getElementById('shBody').innerHTML=`
-  <div class="sheet-id">${ind.id_publico||ind.id} · ${ind.data||'—'}${ind.legacy_id?' · legado '+ind.legacy_id:''}</div>
+  <div class="sheet-id">${ind.id_publico||ind.id} · ${ind.data||'—'}</div>
   <div class="sheet-name">${ind.nome}</div>
   <div class="sheet-sci">${ind.sci||'—'} ${ind.familia?'· '+ind.familia:''}</div>
 
