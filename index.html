@@ -2210,10 +2210,16 @@ function renderMarkers(){
       fillColor:cor,
       fillOpacity:.92
     });
-    m.bindTooltip(ind.id_publico||ind.id,{
+    const idCompleto=ind.id_publico||ind.id;
+    m.bindTooltip(idCompleto,{
       direction:'top',
       offset:[0,-4],
-      className:'tree-id-tooltip'
+      className:'tree-id-tooltip',
+      sticky:true
+    });
+    m.on('mouseover',()=>{
+      const tt=m.getTooltip();
+      if(tt) tt.setContent(idCompleto);
     });
     m.on('click',()=>openSheet(ind.id));
     m.addTo(map);
