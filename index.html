@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>CPF Verde · Cáceres-MT</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Lora:wght@400;600;700&display=swap" rel="stylesheet"/>
@@ -495,6 +498,20 @@ body{display:flex;flex-direction:column;overflow:hidden;}
 .base-toggle button.on{background:#1b4332;color:#fff;}
 #mainBaseToggle{position:absolute;top:12px;right:12px;}
 #preBaseToggle{margin-top:8px;justify-content:center;}
+.form-topbar{position:sticky;top:0;z-index:25;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-bottom:1px solid #dfe9e1;padding:9px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.form-back-btn{height:38px;padding:0 13px;border:1.5px solid #cbdacf;border-radius:10px;background:#fff;color:#1b4332;font-family:Nunito,sans-serif;font-size:13px;font-weight:800;cursor:pointer;}
+.form-top-title{font-size:14px;font-weight:900;color:#1b4332;flex:1;text-align:center;padding-right:72px;}
+.tree-confirm-overlay{display:none;position:fixed;inset:0;background:rgba(13,40,24,.64);z-index:1800;align-items:center;justify-content:center;padding:16px;}
+.tree-confirm-overlay.open{display:flex;}
+.tree-confirm-card{width:min(540px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 18px 60px rgba(0,0,0,.28);}
+.tree-confirm-head{padding:18px;background:linear-gradient(135deg,#1b4332,#2d6a4f);color:#fff;}
+.tree-confirm-body{padding:16px;}
+.tree-confirm-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #edf2ee;font-size:13px;}
+.tree-confirm-row span:first-child{color:#718176;}
+.tree-confirm-row b{text-align:right;color:#1b4332;}
+.tree-confirm-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:8px;padding:0 16px 16px;}
+.tree-confirm-actions button{height:46px;border-radius:11px;font-family:Nunito,sans-serif;font-size:14px;font-weight:900;cursor:pointer;}
+
 
 </style>
 </head>
@@ -533,10 +550,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="screen on" id="screen-map">
   <div id="mapWrap">
     <div id="map"></div>
-    <div class="base-toggle" id="mainBaseToggle">
-      <button id="mainBtnMap" class="on" onclick="setMainBase('map')">🗺️ Mapa</button>
-      <button id="mainBtnSat" onclick="setMainBase('sat')">🛰️ Satélite</button>
-    </div>
     <div class="map-legend">
       <div class="legend-title">Saúde</div>
       <div class="legend-row"><div class="legend-dot" style="background:#2d6a4f"></div>Bom ≥7</div>
@@ -582,6 +595,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 <!-- ADICIONAR -->
 <div class="screen" id="screen-add">
   <div class="form-screen" id="formScroll">
+    <div class="form-topbar">
+      <button class="form-back-btn" onclick="cancelTreeForm()">← Voltar</button>
+      <div class="form-top-title">Cadastro / validação de árvore</div>
+    </div>
 
     <!-- SEÇÃO FOTO+IA — PRIMEIRA COISA A FAZER -->
     <div class="form-section" style="border-top:4px solid #845EC2;">
@@ -1171,7 +1188,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 
     <div class="submit-wrap">
-      <button class="submit-btn" onclick="saveInd()">💾 Registrar Indivíduo no Cadastro</button>
+      <button class="submit-btn" onclick="openTreeConfirm()">✅ Revisar e confirmar cadastro</button>
     </div>
   </div>
 </div>
@@ -1272,11 +1289,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div style="font-weight:900;color:#1b4332;">🔎 3. Conferir antes de importar</div>
         <div class="preid-summary" id="preidSummary"></div>
         <div id="preidMessages"></div>
-        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Use <b>Satélite</b> para conferir os pontos. A imagem nativa é usada até o nível 16; em zoom maior o site apenas amplia essa imagem para não carregar tiles cinza indisponíveis.</div>
-        <div class="base-toggle" id="preBaseToggle">
-          <button id="preBtnSat" class="on" onclick="setPreBase('sat')">🛰️ Satélite</button>
-          <button id="preBtnMap" onclick="setPreBase('map')">🗺️ Mapa</button>
-        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:10px;">💡 Confira a distribuição dos pontos no mapa. A posição exata deve ser confirmada na validação em campo.</div>
         <div id="preidMap"></div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="preid-btn preid-btn-soft" onclick="resetPreIdImport()">Cancelar</button>
@@ -1519,6 +1532,22 @@ document.addEventListener('DOMContentLoaded',()=>{
   <button class="nav-btn" id="nb-export" onclick="goScreen('export')"><span class="nav-ico">⬇️</span>Dados</button>
 </div>
 
+<!-- CONFIRMAÇÃO DE CADASTRO -->
+<div class="tree-confirm-overlay" id="treeConfirmOverlay" onclick="if(event.target===this)closeTreeConfirm()">
+  <div class="tree-confirm-card">
+    <div class="tree-confirm-head">
+      <div style="font-size:26px;margin-bottom:4px;">🌳✅</div>
+      <div style="font-size:19px;font-weight:900;">Confirme antes de salvar</div>
+      <div style="font-size:11px;color:#b7e4c7;margin-top:3px;">Confira os dados principais. Você ainda pode voltar e corrigir.</div>
+    </div>
+    <div class="tree-confirm-body" id="treeConfirmBody"></div>
+    <div class="tree-confirm-actions">
+      <button onclick="closeTreeConfirm()" style="background:#fff;border:1.5px solid #cbdacf;color:#1b4332;">← Voltar e revisar</button>
+      <button onclick="confirmTreeSave()" style="background:#2d6a4f;border:none;color:#fff;">✅ Confirmar e salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- DETAIL SHEET -->
 <div class="sheet-overlay" id="shOverlay" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
@@ -1630,30 +1659,8 @@ function isPreIdentificada(ind){
 function isHiddenRecord(ind){
   return !!ind && ['NAO_ARVORE','ARQUIVADA'].includes(ind.status);
 }
-function setMainBase(tipo){
-  if(!map||!window._osmBase||!window._satBase)return;
-  if(tipo==='sat'){
-    if(map.hasLayer(window._osmBase)) map.removeLayer(window._osmBase);
-    if(!map.hasLayer(window._satBase)) window._satBase.addTo(map);
-  }else{
-    if(map.hasLayer(window._satBase)) map.removeLayer(window._satBase);
-    if(!map.hasLayer(window._osmBase)) window._osmBase.addTo(map);
-  }
-  document.getElementById('mainBtnMap')?.classList.toggle('on',tipo==='map');
-  document.getElementById('mainBtnSat')?.classList.toggle('on',tipo==='sat');
-}
-function setPreBase(tipo){
-  if(!preidMap||!window._preOsm||!window._preSat)return;
-  if(tipo==='map'){
-    if(preidMap.hasLayer(window._preSat)) preidMap.removeLayer(window._preSat);
-    if(!preidMap.hasLayer(window._preOsm)) window._preOsm.addTo(preidMap);
-  }else{
-    if(preidMap.hasLayer(window._preOsm)) preidMap.removeLayer(window._preOsm);
-    if(!preidMap.hasLayer(window._preSat)) window._preSat.addTo(preidMap);
-  }
-  document.getElementById('preBtnMap')?.classList.toggle('on',tipo==='map');
-  document.getElementById('preBtnSat')?.classList.toggle('on',tipo==='sat');
-}
+function setMainBase(){ /* mapa final usa somente OpenStreetMap */ }
+function setPreBase(){ /* prévia final usa somente OpenStreetMap */ }
 
 function publicRecords(){
   return (window._inds||[]).filter(i=>!isHiddenRecord(i));
@@ -1774,19 +1781,12 @@ function featureToPreRecord(f, idx){
 function initPreIdMap(){
   if(preidMap){setTimeout(()=>preidMap.invalidateSize(),100);return;}
   const el=document.getElementById('preidMap'); if(!el)return;
-  preidMap=L.map('preidMap',{zoomControl:true,maxZoom:22}).setView([-16.0713,-57.6826],14);
+  preidMap=L.map('preidMap',{zoomControl:true,maxZoom:19}).setView([-16.0713,-57.6826],14);
 
   window._preOsm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap contributors',maxZoom:19
-  });
-
-  window._preSat = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
-    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
-    maxNativeZoom:16,
-    maxZoom:22
-  });
-
-  window._preSat.addTo(preidMap);
+    attribution:'© OpenStreetMap contributors',
+    maxZoom:19
+  }).addTo(preidMap);
 }
 function renderPreIdPreview(){
   initPreIdMap();
@@ -2019,19 +2019,13 @@ function confirmPin(){
 }
 
 window.addEventListener('load', ()=>{
-  map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30,maxZoom:22}).setView([-16.0713,-57.6826],14);
+  map = L.map('map',{zoomControl:false,tap:true,tapTolerance:30,maxZoom:19}).setView([-16.0713,-57.6826],14);
 
   window._osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap contributors',maxZoom:19
-  });
+    attribution:'© OpenStreetMap contributors',
+    maxZoom:19
+  }).addTo(map);
 
-  window._satBase = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
-    attribution:'Tiles © Esri · Source: Esri, Vantor, Earthstar Geographics, GIS User Community',
-    maxNativeZoom:16,
-    maxZoom:22
-  });
-
-  window._osmBase.addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
 
   // Mira central (crosshair)
@@ -2757,7 +2751,7 @@ function fillFormFromInd(ind){
   if(ind.svcNiveis){ Object.entries(ind.svcNiveis).forEach(([k,v])=>{ if(v!=null){ const btn=document.querySelector(`.score-btn[data-sk="${k}"][data-sv="${v}"]`); if(btn) setSvc(k,parseInt(v),btn); } }); }
   // Código
   const cd=document.getElementById('codigoDisplay'); if(cd) cd.textContent=ind.id;
-  const sb=document.querySelector('.submit-btn'); if(sb){ sb.textContent='✏️ Salvar Edição'; sb.style.background='linear-gradient(135deg,#b45309,#d97706)'; }
+  const sb=document.querySelector('.submit-btn'); if(sb){ sb.textContent=isPreIdentificada(ind)?'✅ Revisar e validar esta árvore':'✅ Revisar e salvar edição'; sb.style.background='linear-gradient(135deg,#b45309,#d97706)'; }
   document.getElementById('f_lat').value = ind.lat;
   document.getElementById('f_lng').value = ind.lng;
   document.getElementById('gpsInfo').textContent = '📍 Coordenadas do registro original';
@@ -3436,6 +3430,72 @@ function aplicarIA(d){
 }
 function nxtId(){const ns=(window._inds||[]).map(i=>parseInt((i.id||'CPF-000').replace('CPF-',''))||0);return'CPF-'+String((ns.length?Math.max(...ns):0)+1).padStart(3,'0');}
 
+function cancelTreeForm(){
+  const hadEdit=!!_editId;
+  const nome=document.getElementById('f_nome')?.value.trim()||'';
+  const sci=document.getElementById('f_sci')?.value.trim()||'';
+  const dap=document.getElementById('f_dap')?.value||'';
+  const hasPhoto=!!photoB64;
+  if(hadEdit||nome||sci||dap||hasPhoto){
+    if(!confirm('Sair sem salvar as alterações deste cadastro?')) return;
+  }
+  if(tempMarker&&map){try{map.removeLayer(tempMarker);}catch(e){} tempMarker=null;}
+  resetForm();
+  goScreen('map');
+}
+
+function openTreeConfirm(){
+  const nome=document.getElementById('f_nome').value.trim();
+  const lat=parseFloat(document.getElementById('f_lat').value);
+  const lng=parseFloat(document.getElementById('f_lng').value);
+  if(!nome){
+    showToast('⚠️ Informe o nome popular antes de continuar');
+    document.getElementById('f_nome')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  if(isNaN(lat)||isNaN(lng)){
+    showToast('⚠️ Confirme a localização antes de continuar');
+    document.getElementById('f_lat')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
+  const old=_editId?(window._inds||[]).find(i=>i.id===_editId):null;
+  const modo=old&&isPreIdentificada(old)?'Validar árvore pré-identificada':(_editId?'Salvar edição':'Registrar nova árvore');
+  const codigo=(old?.id_publico||old?.id||document.getElementById('codigoDisplay')?.textContent||'—');
+  const sci=document.getElementById('f_sci').value.trim()||'Não informado';
+  const dap=document.getElementById('f_dap').value||'Não informado';
+  const cap=document.getElementById('f_cap').value||'Não informado';
+  const ht=document.getElementById('f_ht').value||'Não informado';
+  const bairro=document.getElementById('f_bairro').value.trim()||'Não informado';
+  const vist=document.getElementById('f_col').value.trim()||document.getElementById('f_col_quick').value.trim()||'Não informado';
+  const nota=calcSaude();
+  const foto=photoB64?'Sim':'Não';
+
+  document.getElementById('treeConfirmBody').innerHTML=
+    '<div style="background:#effaf3;border-radius:10px;padding:10px 12px;margin-bottom:10px;color:#1b4332;font-size:12px;"><b>'+modo+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Código</span><b>'+codigo+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Nome popular</span><b>'+nome+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Nome científico</span><b><i>'+sci+'</i></b></div>'+
+    '<div class="tree-confirm-row"><span>Localização</span><b>'+lat.toFixed(6)+', '+lng.toFixed(6)+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Bairro</span><b>'+bairro+'</b></div>'+
+    '<div class="tree-confirm-row"><span>DAP / CAP</span><b>'+dap+' cm / '+cap+' cm</b></div>'+
+    '<div class="tree-confirm-row"><span>Altura</span><b>'+ht+' m</b></div>'+
+    '<div class="tree-confirm-row"><span>Foto principal</span><b>'+foto+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Nota de saúde</span><b>'+(nota!=null?nota.toFixed(1)+'/10':'Não avaliada')+'</b></div>'+
+    '<div class="tree-confirm-row"><span>Vistoriador</span><b>'+vist+'</b></div>';
+
+  document.getElementById('treeConfirmOverlay').classList.add('open');
+}
+
+function closeTreeConfirm(){
+  document.getElementById('treeConfirmOverlay')?.classList.remove('open');
+}
+
+async function confirmTreeSave(){
+  closeTreeConfirm();
+  await saveInd();
+}
+
 async function saveInd(){
   const nome=document.getElementById('f_nome').value.trim();
   const lat=parseFloat(document.getElementById('f_lat').value);
@@ -3541,7 +3601,7 @@ async function saveInd(){
     }
     _editId = null;
     const sb = document.querySelector('.submit-btn');
-    if(sb){ sb.textContent='💾 Registrar Indivíduo no Cadastro'; sb.style.background=''; }
+    if(sb){ sb.textContent='✅ Revisar e confirmar cadastro'; sb.style.background=''; }
     showToast('✅ '+ind.id+' atualizado e validado!');
     resetForm(); goScreen('list');
     return;
@@ -3573,7 +3633,7 @@ function resetForm(){
   svcVals={}; termoPhotos={};
   _editId=null;
   const sb=document.querySelector('.submit-btn');
-  if(sb){sb.textContent='💾 Registrar Indivíduo no Cadastro';sb.style.background='';}
+  if(sb){sb.textContent='✅ Revisar e confirmar cadastro';sb.style.background='';}
   const td=['f_t_sombra','f_t_sol','f_t_reducao','f_t_hora','f_t_ceu'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const tr=document.getElementById('termicoResult'); if(tr) tr.style.display='none';
   ['termico_sombra','termico_sol'].forEach(t=>{const w=document.getElementById('prev_'+t);if(w)w.style.display='none';});
