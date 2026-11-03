@@ -559,8 +559,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
     <!-- Banner modo PIN -->
     <div id="pinBanner" style="display:none;position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#1b4332;color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,.3);white-space:nowrap;">
-      📍 Toque no mapa para marcar a árvore
+      📍 Centralize a árvore e confirme
     </div>
+    <button id="pinBackBtn" onclick="cancelPinMode()" style="display:none;position:absolute;top:12px;left:12px;z-index:650;height:42px;padding:0 15px;border-radius:99px;border:1.5px solid #cbdacf;background:rgba(255,255,255,.97);color:#1b4332;font-family:Nunito,sans-serif;font-size:13px;font-weight:900;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.18);">← Voltar</button>
     <!-- FAB localização -->
     <button id="locBtn" onclick="goToMyLocation()" title="Minha localização"
       style="position:absolute;bottom:160px;right:16px;width:44px;height:44px;border-radius:50%;
@@ -1980,16 +1981,25 @@ let pinMode = false, tempMarker = null, crosshair = null;
 function startPinMode(){
   pinMode = true;
   document.getElementById('pinBanner').style.display='block';
+  document.getElementById('pinBackBtn').style.display='block';
   document.getElementById('mapFab').style.display='none';
-  // Mostrar mira central
   if(crosshair) crosshair.style.display='flex';
-  showToast('📍 Centralize a mira na árvore e toque no botão ✅');
+  showToast('📍 Centralize a mira na árvore e confirme o local');
 }
 function endPinMode(){
   pinMode = false;
   document.getElementById('pinBanner').style.display='none';
+  document.getElementById('pinBackBtn').style.display='none';
   document.getElementById('mapFab').style.display='flex';
   if(crosshair) crosshair.style.display='none';
+}
+function cancelPinMode(){
+  if(tempMarker && map){
+    try{ map.removeLayer(tempMarker); }catch(e){}
+    tempMarker=null;
+  }
+  endPinMode();
+  showToast('↩️ Marcação cancelada');
 }
 function confirmPin(){
   // Pega o centro atual do mapa como coordenada
