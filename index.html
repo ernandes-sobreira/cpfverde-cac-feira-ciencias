@@ -2148,18 +2148,56 @@ function renderMarkers(){
   if(!map) return;
   Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
   preHalos.forEach(h=>map.removeLayer(h)); preHalos=[];
+
   publicRecords().forEach(ind=>{
-    if(!ind.lat||!ind.lng)return;
+    if(!ind.lat||!ind.lng) return;
+
+    const latlng=[Number(ind.lat),Number(ind.lng)];
+
     if(isPreIdentificada(ind)){
-      const h=L.circleMarker([ind.lat,ind.lng],{
-        radius:16,color:'#2563eb',weight:1.5,opacity:.65,
-        fillColor:'#60a5fa',fillOpacity:.10,interactive:false
+      // Halo de incerteza em metros reais: permanece preso ao terreno.
+      const halo=L.circle(latlng,{
+        radius:5,
+        color:'#2563eb',
+        weight:1.5,
+        opacity:.65,
+        fillColor:'#60a5fa',
+        fillOpacity:.10,
+        interactive:false
       }).addTo(map);
-      preHalos.push(h);
+      preHalos.push(halo);
+
+      const m=L.circle(latlng,{
+        radius:2.2,
+        color:'#1d4ed8',
+        weight:2,
+        opacity:1,
+        fillColor:'#3b82f6',
+        fillOpacity:.88
+      });
+      m.bindTooltip('Pré-ID · '+(ind.id_publico||ind.id),{direction:'top',offset:[0,-4]});
+      m.on('click',()=>openSheet(ind.id));
+      m.addTo(map);
+      markers[ind.id]=m;
+      return;
     }
-    const m=L.marker([ind.lat,ind.lng],{icon:isPreIdentificada(ind)?mkPreIcon(ind):mkIcon(ind)});
+
+    const cor=mkColor(ind.saudeNota);
+    const m=L.circle(latlng,{
+      radius:3,
+      color:'#ffffff',
+      weight:2,
+      opacity:1,
+      fillColor:cor,
+      fillOpacity:.92
+    });
+    m.bindTooltip(
+      (ind.nome||'Árvore')+(ind.saudeNota!=null?' · '+ind.saudeNota.toFixed(1):''),
+      {direction:'top',offset:[0,-4]}
+    );
     m.on('click',()=>openSheet(ind.id));
-    m.addTo(map); markers[ind.id]=m;
+    m.addTo(map);
+    markers[ind.id]=m;
   });
 }
 
